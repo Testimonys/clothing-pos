@@ -16,4 +16,12 @@ public class WebMvcConfig implements WebMvcConfigurer {
         registry.addResourceHandler("/uploads/**")
                 .addResourceLocations("file:" + uploadPath + "/");
     }
+
+    /**
+     * Vue SPA History 模式回退：非 /api/ 路径都返回 index.html
+     */
+    @Override
+    public void addViewControllers(org.springframework.web.servlet.config.annotation.ViewControllerRegistry registry) {
+        registry.addViewController("/{spring:[^(api)].*}").setViewName("forward:/index.html");
+    }
 }
