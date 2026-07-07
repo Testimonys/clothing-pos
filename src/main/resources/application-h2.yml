@@ -1,0 +1,36 @@
+spring:
+  datasource:
+    url: jdbc:h2:mem:clothing_pos;DB_CLOSE_DELAY=-1;MODE=MySQL
+    username: sa
+    password:
+    driver-class-name: org.h2.Driver
+  jpa:
+    hibernate:
+      ddl-auto: create
+    show-sql: true
+    properties:
+      hibernate:
+        dialect: org.hibernate.dialect.H2Dialect
+  h2:
+    console:
+      enabled: true
+      path: /h2-console
+  sql:
+    init:
+      mode: always
+      data-locations: classpath:data-h2.sql
+
+app:
+  jwt:
+    secret: huaxing-clothing-pos-jwt-secret-key-2026
+    expiration-ms: 86400000
+  store:
+    name: 华兴服装店
+  backup:
+    path: ./backup
+    keep-days: 7
+  printer:
+    enabled: true
+
+server:
+  port: 8181
