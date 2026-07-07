@@ -8,10 +8,13 @@ import com.huaxing.entity.StockRecord;
 import com.huaxing.entity.SysUser;
 import com.huaxing.enums.PayMethod;
 import com.huaxing.enums.StockType;
+import com.huaxing.printer.EscPosPrinter;
 import com.huaxing.repository.OrderItemRepository;
 import com.huaxing.repository.OrderRepository;
 import com.huaxing.repository.ProductSkuRepository;
 import com.huaxing.repository.StockRecordRepository;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
@@ -41,8 +44,10 @@ public class OrderController {
     private final ProductSkuRepository productSkuRepository;
     private final StockRecordRepository stockRecordRepository;
 
+    private static final Logger log = LoggerFactory.getLogger(OrderController.class);
+
     @Autowired(required = false)
-    private Object escPosPrinter;
+    private EscPosPrinter escPosPrinter;
 
     public OrderController(OrderRepository orderRepository,
                            OrderItemRepository orderItemRepository,
@@ -179,10 +184,9 @@ public class OrderController {
         // 5. 触发打印（如 printReceipt=true 且打印机可用）
         if (request.isPrintReceipt() && escPosPrinter != null) {
             try {
-                // 占位：Task14 实现打印后接入
-                // escPosPrinter.printOrder(order);
+                escPosPrinter.printOrder(order, order.getItems());
             } catch (Exception e) {
-                // 打印失败不影响订单创建
+                log.warn("打印小票失败: {}", e.getMessage());
             }
         }
 
@@ -262,13 +266,20 @@ public class OrderController {
         }
 
         if (escPosPrinter == null) {
-            return ResponseEntity.ok(Map.of("message", "打印服务暂未接入"));
+            return ResponseEntity.ok(Map.of("message", "打印服务未启用（app.printer.enabled=false）"));
         }
 
-        // 占位：Task14 实现打印后接入
-        // Order order = orderRepository.findById(id).orElse(null);
-        // escPosPrinter.printOrder(order);
+        Order order = orderRepository.findById(id).orElse(null);
+        if (order == null) {
+            return ResponseEntity.notFound().build();
+        }
 
+        // 触发懒加载 items
+        if (order.getItems() != null) {
+            order.getItems().size();
+        }
+
+        escPosPrinter.printOrder(order, order.getItems());
         return ResponseEntity.ok(Map.of("message", "补打指令已发送"));
     }
 

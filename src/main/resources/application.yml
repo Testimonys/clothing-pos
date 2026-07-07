@@ -32,5 +32,6 @@ app:
     keep-days: 7
   printer:
     enabled: true
+    port: /dev/cu.usbprinter
   upload:
     path: ./uploads
