@@ -19,7 +19,7 @@ CREATE TABLE IF NOT EXISTS sys_user (
     username VARCHAR(50) NOT NULL UNIQUE,
     password VARCHAR(200) NOT NULL,
     display_name VARCHAR(50) NOT NULL,
-    role VARCHAR(20) NOT NULL COMMENT 'BOSS/CLERK',
+    role ENUM('BOSS','CLERK') NOT NULL,
     enabled TINYINT(1) DEFAULT 1,
     create_time DATETIME DEFAULT CURRENT_TIMESTAMP
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
@@ -56,7 +56,7 @@ CREATE TABLE IF NOT EXISTS stock_record (
     sku_id BIGINT NOT NULL,
     product_name VARCHAR(200) NOT NULL DEFAULT '',
     sku_spec VARCHAR(100) NOT NULL DEFAULT '',
-    type VARCHAR(20) NOT NULL COMMENT 'INBOUND/OUTBOUND',
+    type ENUM('INBOUND','OUTBOUND') NOT NULL,
     qty INT NOT NULL,
     before_qty INT NOT NULL,
     after_qty INT NOT NULL,
@@ -74,7 +74,7 @@ CREATE TABLE IF NOT EXISTS sys_order (
     pay_amount DECIMAL(10,2) NOT NULL DEFAULT 0.00,
     receive_amount DECIMAL(10,2) NOT NULL DEFAULT 0.00,
     change_amount DECIMAL(10,2) NOT NULL DEFAULT 0.00,
-    pay_method VARCHAR(20) NOT NULL COMMENT 'CASH/WECHAT/ALIPAY',
+    pay_method ENUM('CASH','WECHAT','ALIPAY') NOT NULL,
     cashier_id BIGINT NULL,
     member_id BIGINT NULL,
     create_time DATETIME(0) DEFAULT CURRENT_TIMESTAMP(0),
