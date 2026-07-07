@@ -23,6 +23,6 @@ public interface OrderRepository extends JpaRepository<Order, Long> {
                        @Param("payMethod") PayMethod payMethod,
                        Pageable pageable);
 
-    @Query("SELECT MAX(o.id) FROM Order o WHERE o.createTime >= :todayStart")
-    Long maxIdToday(@Param("todayStart") LocalDateTime todayStart);
+    @Query("SELECT COUNT(o.id) FROM Order o WHERE o.createTime >= :todayStart")
+    Long countOrdersToday(@Param("todayStart") LocalDateTime todayStart);
 }

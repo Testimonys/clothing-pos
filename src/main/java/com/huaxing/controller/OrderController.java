@@ -98,15 +98,13 @@ public class OrderController {
             skuList.add(sku);
         }
 
-        // 2. 生成单号 POS + yyyyMMdd + 4位序号
-        LocalDateTime todayStart = LocalDateTime.of(LocalDate.now(), LocalTime.MIN);
-        Long maxIdToday = orderRepository.maxIdToday(todayStart);
-        int seq = (maxIdToday != null) ? maxIdToday.intValue() + 1 : 1;
-        if (seq > 9999) {
-            return ResponseEntity.badRequest().body(Map.of("message", "今日订单序号已用完（最大9999）"));
+        // 2. 生成单号 POS + yyyyMMdd + 4位序号（synchronized 防并发重复单号）
+        String orderNo;
+        try {
+            orderNo = generateOrderNo();
+        } catch (IllegalStateException e) {
+            return ResponseEntity.badRequest().body(Map.of("message", e.getMessage()));
         }
-        String orderNo = "POS" + LocalDate.now().format(DateTimeFormatter.ofPattern("yyyyMMdd"))
-                + String.format("%04d", seq);
 
         // 3. 保存 Order
         Order order = Order.builder()
@@ -272,6 +270,21 @@ public class OrderController {
         // escPosPrinter.printOrder(order);
 
         return ResponseEntity.ok(Map.of("message", "补打指令已发送"));
+    }
+
+    /**
+     * 生成订单单号：POS + yyyyMMdd + 4位序号
+     * synchronized 防止并发请求产生重复单号
+     */
+    private synchronized String generateOrderNo() {
+        LocalDateTime todayStart = LocalDateTime.of(LocalDate.now(), LocalTime.MIN);
+        Long countToday = orderRepository.countOrdersToday(todayStart);
+        int seq = (countToday != null) ? countToday.intValue() + 1 : 1;
+        if (seq > 9999) {
+            throw new IllegalStateException("今日订单序号已用完（最大9999）");
+        }
+        return "POS" + LocalDate.now().format(DateTimeFormatter.ofPattern("yyyyMMdd"))
+                + String.format("%04d", seq);
     }
 
     // ---- DTO mapping methods ----
