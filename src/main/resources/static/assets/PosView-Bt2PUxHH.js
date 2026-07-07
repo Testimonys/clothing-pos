@@ -1,0 +1,1 @@
+import{d as s,c as n,j as t,t as a,o as l}from"./index-xnJ4WGOJ.js";const r={style:{padding:"24px"}},c=s({__name:"PosView",props:{title:{}},setup(o){return(i,e)=>(l(),n("div",r,[t("h2",null,a(o.title),1),e[0]||(e[0]=t("p",{style:{color:"#999"}},"此页面正在开发中...",-1))]))}});export{c as default};
