@@ -35,6 +35,10 @@ public class ProductSku {
     @Column(name = "stock_qty")
     private Integer stockQty;
 
+    @Version
+    @Column(name = "version")
+    private Long version = 0L;
+
     private LocalDateTime createTime;
 
     @PrePersist

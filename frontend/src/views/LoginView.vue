@@ -42,9 +42,6 @@
           </el-button>
         </el-form-item>
       </el-form>
-      <div class="login-hint">
-        <span>默认管理员：admin / admin123</span>
-      </div>
     </el-card>
   </div>
 </template>
@@ -110,10 +107,5 @@ async function handleLogin() {
   color: #303133;
 }
 
-.login-hint {
-  text-align: center;
-  color: #909399;
-  font-size: 12px;
-  margin-top: 8px;
-}
+
 </style>

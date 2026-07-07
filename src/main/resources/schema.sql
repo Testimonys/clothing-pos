@@ -46,6 +46,7 @@ CREATE TABLE IF NOT EXISTS product_sku (
     barcode VARCHAR(100) NULL UNIQUE,
     stock_qty INT DEFAULT 0,
     create_time DATETIME DEFAULT CURRENT_TIMESTAMP,
+    version BIGINT DEFAULT 0,
     FOREIGN KEY (product_id) REFERENCES product(id)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 

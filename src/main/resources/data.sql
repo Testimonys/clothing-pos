@@ -6,6 +6,10 @@
 INSERT IGNORE INTO sys_user (username, password, display_name, role) VALUES
 ('admin', '$2a$10$uSPtBju2fRXRbLBivT9Uk.iCFiB2pQ.P3L9QNP.sbAUUUt60mN79O', '老板', 'BOSS');
 
+-- 默认店员: user / user123 (BCrypt)
+INSERT IGNORE INTO sys_user (username, password, display_name, role) VALUES
+('user', '$2a$10$N9qo8uLOickgx2ZMRZoMyeIjZAgcfl7p92ldGxad68LJZdL17lhWy', '店员', 'CLERK');
+
 -- 默认商品分类
 INSERT IGNORE INTO category (id, name, parent_id, sort_order) VALUES
 (1, '上衣', NULL, 1),

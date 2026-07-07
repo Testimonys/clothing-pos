@@ -15,6 +15,7 @@ import java.net.URISyntaxException;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.attribute.BasicFileAttributes;
+import java.nio.file.attribute.PosixFilePermission;
 import java.sql.Connection;
 import java.time.Duration;
 import java.time.LocalDateTime;
@@ -75,14 +76,27 @@ public class BackupService {
         String timestamp = LocalDateTime.now().format(FORMATTER);
         String fileName = "backup_" + timestamp + ".sql";
         Path targetFile = backupPath.resolve(fileName);
+        Path tmpConfig = null;
 
         try {
+            // 创建临时配置文件，避免密码暴露在进程列表中
+            tmpConfig = Files.createTempFile("mysqldump_", ".cnf");
+            try {
+                // 设置文件权限为仅 owner 可读写
+                Set<PosixFilePermission> perms = new HashSet<>();
+                perms.add(PosixFilePermission.OWNER_READ);
+                perms.add(PosixFilePermission.OWNER_WRITE);
+                Files.setPosixFilePermissions(tmpConfig, perms);
+            } catch (Exception e) {
+                // 非 POSIX 系统忽略
+            }
+            String configContent = "[client]\nuser=" + dbUser + "\npassword=" + dbPassword
+                    + "\nhost=" + dbHost + "\nport=" + dbPort + "\n";
+            Files.writeString(tmpConfig, configContent);
+
             ProcessBuilder pb = new ProcessBuilder(
                     "mysqldump",
-                    "-h", dbHost,
-                    "-P", String.valueOf(dbPort),
-                    "-u", dbUser,
-                    "-p" + dbPassword,
+                    "--defaults-extra-file=" + tmpConfig.toAbsolutePath().toString(),
                     dbName
             );
             pb.redirectOutput(targetFile.toFile());
@@ -115,6 +129,14 @@ public class BackupService {
             } catch (IOException ignored) {
             }
             throw new RuntimeException("备份失败: " + e.getMessage(), e);
+        } finally {
+            // 删除临时配置文件
+            if (tmpConfig != null) {
+                try {
+                    Files.deleteIfExists(tmpConfig);
+                } catch (IOException ignored) {
+                }
+            }
         }
     }
 

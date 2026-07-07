@@ -245,28 +245,40 @@ public class ProductController {
                     String today = LocalDate.now().format(DateTimeFormatter.ofPattern("yyyyMMdd"));
                     String prefix = "HUAXING" + today;
 
-                    String maxBarcode = productSkuRepository.findMaxBarcodeByPrefix(prefix);
-                    int seq = 1;
-                    if (maxBarcode != null && maxBarcode.length() >= prefix.length() + 3) {
-                        String seqStr = maxBarcode.substring(prefix.length());
-                        try {
-                            seq = Integer.parseInt(seqStr) + 1;
-                        } catch (NumberFormatException e) {
-                            // ignore, use default seq = 1
-                        }
-                    }
-                    if (seq > 999) {
+                    String barcode;
+                    try {
+                        barcode = doGenerateBarcode(prefix, productSkuRepository);
+                    } catch (IllegalStateException e) {
                         return ResponseEntity.badRequest()
-                                .body(Map.of("message", "今日条码序号已用完（最大999）"));
+                                .body(Map.of("message", e.getMessage()));
                     }
-
-                    String barcode = prefix + String.format("%03d", seq);
                     sku.setBarcode(barcode);
                     productSkuRepository.save(sku);
 
                     return ResponseEntity.ok(Map.of("barcode", barcode));
                 })
                 .orElse(ResponseEntity.notFound().build());
+    }
+
+    /**
+     * 同步生成条码，避免并发重复。
+     * 规则: prefix + 3位递增序号（001~999）
+     */
+    private synchronized String doGenerateBarcode(String prefix, ProductSkuRepository repo) {
+        String maxBarcode = repo.findMaxBarcodeByPrefix(prefix);
+        int seq = 1;
+        if (maxBarcode != null && maxBarcode.length() >= prefix.length() + 3) {
+            String seqStr = maxBarcode.substring(prefix.length());
+            try {
+                seq = Integer.parseInt(seqStr) + 1;
+            } catch (NumberFormatException e) {
+                // ignore, use default seq = 1
+            }
+        }
+        if (seq > 999) {
+            throw new IllegalStateException("今日条码序号已用完（最大999）");
+        }
+        return prefix + String.format("%03d", seq);
     }
 
     // ---- DTO mapping methods ----
