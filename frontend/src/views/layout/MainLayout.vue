@@ -3,7 +3,7 @@
     <!-- 侧边栏 -->
     <el-aside width="220px" class="sidebar">
       <div class="logo">
-        <h2>AI 收银系统</h2>
+        <h2>华兴鞋服城</h2>
       </div>
       <el-menu
         :default-active="activeMenu"

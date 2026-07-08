@@ -2,7 +2,7 @@
   <div class="login-wrapper">
     <el-card class="login-card" shadow="always">
       <template #header>
-        <h2 class="login-title">AI 收银系统</h2>
+        <h2 class="login-title">华兴鞋服城</h2>
       </template>
       <el-form
         ref="formRef"
