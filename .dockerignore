@@ -1,0 +1,28 @@
+# Git
+.git/
+.gitignore
+
+# IDE
+.idea/
+.DS_Store
+*.iml
+.vscode/
+
+# 构建产物（在 Docker 内重新构建）
+target/
+frontend/dist/
+frontend/node_modules/
+
+# 文档和记录（除 CLAUDE.md）
+*.md
+*.log
+task-*-report.md
+
+# 临时文件
+.traces/
+.claude/
+.superpowers/
+
+# 备份和上传（运行时目录，不进入镜像）
+backup/
+uploads/
