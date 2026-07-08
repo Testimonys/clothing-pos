@@ -2,7 +2,7 @@ package com.huaxing.controller;
 
 import com.huaxing.dto.CategoryDTO;
 import com.huaxing.entity.Category;
-import com.huaxing.repository.CategoryRepository;
+import com.huaxing.mapper.CategoryMapper;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
@@ -13,15 +13,15 @@ import java.util.stream.Collectors;
 @RequestMapping("/api/setting/categories")
 public class CategoryController {
 
-    private final CategoryRepository categoryRepository;
+    private final CategoryMapper categoryMapper;
 
-    public CategoryController(CategoryRepository categoryRepository) {
-        this.categoryRepository = categoryRepository;
+    public CategoryController(CategoryMapper categoryMapper) {
+        this.categoryMapper = categoryMapper;
     }
 
     @GetMapping
     public ResponseEntity<List<CategoryDTO>> list() {
-        List<CategoryDTO> list = categoryRepository.findAll().stream()
+        List<CategoryDTO> list = categoryMapper.selectList(null).stream()
                 .map(this::toDTO)
                 .collect(Collectors.toList());
         return ResponseEntity.ok(list);
@@ -31,36 +31,30 @@ public class CategoryController {
     public ResponseEntity<CategoryDTO> create(@RequestBody CategoryDTO dto) {
         Category category = new Category();
         category.setName(dto.getName());
-        if (dto.getParentId() != null) {
-            category.setParent(categoryRepository.findById(dto.getParentId()).orElse(null));
-        }
+        category.setParentId(dto.getParentId());
         category.setSortOrder(dto.getSortOrder());
-        category = categoryRepository.save(category);
+        categoryMapper.insert(category);
         return ResponseEntity.ok(toDTO(category));
     }
 
     @PutMapping("/{id}")
     public ResponseEntity<?> update(@PathVariable Long id, @RequestBody CategoryDTO dto) {
-        return categoryRepository.findById(id)
-                .map(category -> {
-                    category.setName(dto.getName());
-                    if (dto.getParentId() != null) {
-                        category.setParent(categoryRepository.findById(dto.getParentId()).orElse(null));
-                    } else {
-                        category.setParent(null);
-                    }
-                    category.setSortOrder(dto.getSortOrder());
-                    categoryRepository.save(category);
-                    return ResponseEntity.ok(toDTO(category));
-                })
-                .orElse(ResponseEntity.notFound().build());
+        Category category = categoryMapper.selectById(id);
+        if (category == null) {
+            return ResponseEntity.notFound().build();
+        }
+        category.setName(dto.getName());
+        category.setParentId(dto.getParentId());
+        category.setSortOrder(dto.getSortOrder());
+        categoryMapper.updateById(category);
+        return ResponseEntity.ok(toDTO(category));
     }
 
     private CategoryDTO toDTO(Category category) {
         return CategoryDTO.builder()
                 .id(category.getId())
                 .name(category.getName())
-                .parentId(category.getParent() != null ? category.getParent().getId() : null)
+                .parentId(category.getParentId())
                 .sortOrder(category.getSortOrder())
                 .createTime(category.getCreateTime())
                 .build();

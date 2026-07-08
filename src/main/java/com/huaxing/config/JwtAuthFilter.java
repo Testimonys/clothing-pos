@@ -1,7 +1,7 @@
 package com.huaxing.config;
 
 import com.huaxing.entity.SysUser;
-import com.huaxing.repository.SysUserRepository;
+import com.huaxing.mapper.SysUserMapper;
 import jakarta.servlet.FilterChain;
 import jakarta.servlet.ServletException;
 import jakarta.servlet.http.HttpServletRequest;
@@ -21,11 +21,11 @@ import java.util.List;
 public class JwtAuthFilter extends OncePerRequestFilter {
 
     private final JwtUtil jwtUtil;
-    private final SysUserRepository sysUserRepository;
+    private final SysUserMapper sysUserMapper;
 
-    public JwtAuthFilter(JwtUtil jwtUtil, SysUserRepository sysUserRepository) {
+    public JwtAuthFilter(JwtUtil jwtUtil, SysUserMapper sysUserMapper) {
         this.jwtUtil = jwtUtil;
-        this.sysUserRepository = sysUserRepository;
+        this.sysUserMapper = sysUserMapper;
     }
 
     @Override
@@ -36,7 +36,7 @@ public class JwtAuthFilter extends OncePerRequestFilter {
 
         if (token != null && jwtUtil.validateToken(token)) {
             String username = jwtUtil.parseUsername(token);
-            SysUser user = sysUserRepository.findByUsername(username).orElse(null);
+            SysUser user = sysUserMapper.findByUsername(username).orElse(null);
 
             if (user != null && user.getEnabled()) {
                 List<SimpleGrantedAuthority> authorities = List.of(

@@ -4,29 +4,44 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## 项目概述
 
-华兴服装店库存管理与收银系统 — 本地部署的 Spring Boot 3.2 + Vue 3 全栈应用，服务于自有服装商店（2-3 人使用，老板 + 店员角色）。
+华兴服装店库存管理与收银系统 — Spring Boot 3.2 + Vue 3 前后端分离应用，Docker 部署，服务于自有服装商店（2-3 人使用，老板 + 店员角色）。
 
 ## 构建与运行
 
+### Docker 部署（推荐）
+
 ```bash
-# 前端开发（独立运行，API 代理到 localhost:8080）
-cd frontend && npm run dev          # → http://localhost:5173
+# 一键构建 + 启动（前端 + 后端 + MySQL 全部在 Docker 内完成）
+docker compose up -d --build
 
-# 前端构建（输出到 ../src/main/resources/static/）
-cd frontend && npm run build
+# 前端: http://localhost
+# 后端 API: http://localhost:8080
+# 停止: docker compose down
+```
 
-# 后端编译
-mvn compile
+### 开发模式（前后端分离）
 
-# 完整打包（前端 build + 后端 package → fat jar）
+```bash
+# 终端 1：启动后端
+mvn spring-boot:run                        # → http://localhost:8080
+
+# 终端 2：启动前端 Vite dev server
+cd frontend && npm run dev                  # → http://localhost:5173
+```
+
+> 注意：开发模式需要本地 MySQL 运行中。
+
+### 无 Docker 本地运行
+
+```bash
+# 1. 创建 MySQL 数据库
+mysql -u root -p -e "CREATE DATABASE IF NOT EXISTS clothing_pos DEFAULT CHARSET utf8mb4;"
+
+# 2. 构建
 cd frontend && npm run build && cd .. && mvn clean package -DskipTests
 
-# 启动（需先创建 MySQL 数据库）
+# 3. 启动
 java -jar target/clothing-pos-1.0.0.jar
-
-# H2 内存数据库开发模式（无需 MySQL）
-java -jar target/clothing-pos-1.0.0.jar --spring.profiles.active=h2
-# 默认端口 8181，H2 控制台: http://localhost:8181/h2-console
 ```
 
 **默认账号：** `admin` / `admin123`（老板），`user` / `user123`（店员）
@@ -34,82 +49,82 @@ java -jar target/clothing-pos-1.0.0.jar --spring.profiles.active=h2
 ## 技术架构
 
 ```
-浏览器 → Vue 3 SPA (Vite + Element Plus)
-           ↓ REST /api/*
-       Spring Boot 3.2 (fat jar)
-           ↓ JPA/Hibernate
-       MySQL 8.0 (或 H2 开发模式)
+浏览器 → nginx (Vue 静态文件, :80)
+              ↓ /api/* (proxy_pass)
+         Spring Boot (:8080)
+              ↓ MyBatis-Plus
+         MySQL 8.0 (:3306)
 ```
 
-- **前后端分离开发，部署合并** — 开发时 Vite dev server 代理 API；部署时 Vue build 产物放入 `src/main/resources/static/`，打成一个 fat jar
-- **无状态 JWT 认证** — jjwt 0.12.x，Bearer token，24h 过期；SecurityConfig 保护 `/api/**`，前端静态资源全放行
-- **BOSS/CLERK 角色控制** — SecurityConfig 控制 `/api/setting/**` 需 ROLE_BOSS；前端路由守卫 `meta.bossOnly` 拦截非老板用户
+- **前后端完全分离** — 前端 nginx 容器服务 Vue SPA；后端容器服务 REST API；nginx 反向代理 `/api/` 到后端
+- **Vue Router history 模式** — nginx `try_files $uri /index.html` 处理 SPA 路由回退
+- **无状态 JWT 认证** — jjwt 0.12.x，Bearer token，24h 过期
+- **BOSS/CLERK 角色控制** — SecurityConfig `/api/setting/**` 需 ROLE_BOSS；前端路由守卫 `meta.bossOnly`
 
 ## 关键设计决策
 
 ### 数据库
 - **7 张表**：category, product, product_sku, stock_record, sys_order, order_item, sys_user
-- **product ↔ product_sku 分离** — 商品主表存基本信息，SKU 表存颜色/尺码/条码/库存，预留独立 SKU 管理扩展
-- **乐观锁** — `product_sku.version` 字段（`@Version`），防止并发扣库存超卖
-- **流水冗余** — `stock_record` 和 `order_item` 冗余 `product_name` + `sku_spec`，历史记录不随商品改名而变
-- **枚举列** — schema.sql 中 `type`、`pay_method`、`role` 使用 MySQL ENUM 类型（非 VARCHAR），匹配 Hibernate 映射
-- **`sys_order`** — 表名加 `sys_` 前缀避免 MySQL `order` 保留字冲突
-- **H2 模式** — 需 `spring.jpa.defer-datasource-initialization: true` 确保 DDL 先于 data-h2.sql 执行
+- **product ↔ product_sku 分离** — 商品主表存基本信息，SKU 表存颜色/尺码/条码/库存
+- **乐观锁** — `product_sku.version` 字段（MyBatis-Plus `@Version`），防止并发扣库存超卖
+- **流水冗余** — `stock_record` 和 `order_item` 冗余 `product_name` + `sku_spec`
+- **枚举列** — MySQL ENUM 类型匹配 MyBatis-Plus `@EnumValue` 映射（非 VARCHAR）
+- **`sys_order`** — 加 `sys_` 前缀避免 MySQL `order` 保留字
 
 ### 订单单号
 - 格式：`POS` + yyyyMMdd + 4 位序号
-- 序号 = 当日订单数 COUNT + 1（非 MAX(id)，避免 ID 空洞跳跃）
-- 生成方法 `synchronized`，防止同 JVM 内并发重复
+- 序号 = COUNT + 1（非 MAX(id)），`synchronized` 防并发
 
 ### 条码
-- 厂家条码直接使用；自生成条码规则：`HUAXING` + yyyyMMdd + 三位序号
-- 生成方法 `synchronized` 保护，DB 层 `barcode UNIQUE` 约束兜底
+- 自生成规则：`HUAXING` + yyyyMMdd + 三位序号，`synchronized` 保护
 
 ### ESC/POS 小票打印
-- 后端生成 ESC/POS 指令（GBK 编码中文），直接写 USB 端口
-- macOS 端口 `/dev/cu.usbprinter`，Linux `/dev/usb/lp0`，Windows 需配置
-- 写入失败自动降级输出到 `receipt_debug.txt`
+- ESC/POS 指令（GBK 编码），写 USB 端口；失败降级到 `receipt_debug.txt`
+- `@ConditionalOnProperty("app.printer.enabled")`，打印机未连接时不阻塞启动
 
 ### 备份
-- 后端调用 `mysqldump`，通过 `--defaults-extra-file` 临时文件传递密码（不在进程列表中暴露）
-- 文件名 `backup_yyyyMMdd_HHmmss.sql`，自动清理 7 天前的备份
-- 路径穿越防护：`normalize()` + startsWith 校验
+- `mysqldump` + `--defaults-extra-file` 传递密码（不暴露在进程列表）
+- 文件 `backup_yyyyMMdd_HHmmss.sql`，保留 7 天
 
-### 图片上传
-- `POST /api/upload/image`，校验 jpg/png/gif，存储到 `./uploads/`
-- 通过 WebMvcConfig 映射 `/uploads/**` → 本地目录
-- SecurityConfig 中 `/uploads/**` 已放行
-
-### 前端
-- Vue Router history 模式，WebMvcConfig 配置 SPA 回退：非 `/api/` 路径 → `forward:/index.html`
-- Token 存 localStorage，Axios 拦截器自动附加 Authorization header
-- 收银台输入框自动聚焦，F12 快捷键结账
-- 扫码枪模拟键盘输入 + 回车，前端监听回车事件
+### Docker 注意事项
+- **多阶段构建** — 后端 Dockerfile（Maven 编译 → JRE 运行），前端 Dockerfile（Node 构建 → nginx 托管），`docker compose up --build` 一把梭
+- MySQL schema.sql + data.sql 挂载到 `/docker-entrypoint-initdb.d/`，容器首次启动自动初始化
+- Docker 环境使用 `application-docker.yml`（`spring.sql.init.mode: never`），避免 Spring Boot 重复执行初始化脚本
+- `backend` 容器依赖 MySQL healthcheck 通过后才启动；所有服务 `restart: unless-stopped`
+- `uploads/` 和 `backup/` 目录使用 Docker volume 持久化
+- 无需预先安装 JDK/Maven/Node.js，全部在 Docker 镜像内完成
 
 ## 配置文件
 
-- `application.yml` — MySQL 生产配置（端口 8080）
-- `application-h2.yml` — H2 开发配置（端口 8181）
-- 自定义配置前缀 `app.*`：jwt, store, backup, printer, upload
+| 文件 | 用途 |
+|------|------|
+| `application.yml` | MySQL 生产配置（端口 8080） |
+| `application-docker.yml` | Docker 环境配置（sql.init.mode: never） |
+| `docker-compose.yml` | Docker 三服务编排 |
+| `frontend/nginx.conf` | nginx 反向代理 + SPA 回退 |
+| `frontend/Dockerfile` | 前端多阶段构建（node build + nginx serve） |
+| `Dockerfile` | 后端多阶段构建（maven build + JRE run） |
 
 ## 包结构
 
 ```
 com.huaxing
-├── config/      # Security, JWT, CORS, WebMvc
+├── config/      # Security, JWT, CORS, WebMvc, MyBatisPlus, MetaObjectHandler
 ├── controller/  # REST 控制器（7 个）
 ├── dto/         # 请求/响应 DTO（10 个）
-├── entity/      # JPA 实体（7 个）+ @PrePersist/@PreUpdate
+├── entity/      # MyBatis-Plus 实体（7 个）
 ├── enums/       # PayMethod, StockType, UserRole
+├── mapper/      # MyBatis-Plus Mapper 接口（7 个）
 ├── printer/     # ESC/POS 打印服务
-├── repository/  # Spring Data JPA 接口（7 个）
 └── service/     # BackupService
 ```
 
 ## 已知注意事项
 
-- JDBC URL 中 `characterEncoding=UTF-8`（非 `utf8mb4`，MySQL Connector/J 需要 Java 字符集名）
-- schema.sql 中的 ENUM 值需与 Java 枚举名称完全一致（大写）
-- `@Autowired(required = false)` 用于 EscPosPrinter（打印机可能未连接）
-- 构建后 jar 约 54MB，需 JDK 17+ 运行
-- Lombok 版本手动指定为 1.18.46（兼容 JDK 26+），非 Spring Boot parent 默认版本
+- JDBC URL `characterEncoding=UTF-8`（非 `utf8mb4`，需 Java 字符集名）
+- schema.sql ENUM 值需与 Java 枚举名称完全一致（大写）
+- Lombok 版本 1.18.46（兼容 JDK 26+）
+- MyBatis-Plus 3.5.7，分页查询 `Page.current` 从 1 开始（非 0-based），Controller 中使用 `page + 1` 转换
+- 实体间关联（`@ManyToOne`/`@OneToMany`）已迁移为 MyBatis-Plus 的 `@TableField(exist = false)` + 手动查询
+- 级联保存（如 Product → SKU）需手动分步 insert，使用 `@Transactional` 保证原子性
+- 前端 dist 和后端 target 目录不提交到 git

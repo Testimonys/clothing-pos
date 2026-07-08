@@ -1,38 +1,35 @@
 package com.huaxing.entity;
 
-import jakarta.persistence.*;
+import com.baomidou.mybatisplus.annotation.*;
 import lombok.*;
 
 import java.time.LocalDateTime;
 
-@Entity
-@Table(name = "category")
+@TableName("category")
 @Data
 @NoArgsConstructor
 @AllArgsConstructor
 @Builder
 public class Category {
 
-    @Id
-    @GeneratedValue(strategy = GenerationType.IDENTITY)
+    @TableId(type = IdType.AUTO)
     private Long id;
 
-    @Column(nullable = false, length = 50)
+    @TableField(value = "name")
     private String name;
 
-    @ManyToOne(fetch = FetchType.LAZY)
-    @JoinColumn(name = "parent_id")
-    @ToString.Exclude
-    @EqualsAndHashCode.Exclude
+    /** 父分类 ID */
+    @TableField("parent_id")
+    private Long parentId;
+
+    /** 父分类实体（非数据库字段，手动填充） */
+    @TableField(exist = false)
     private Category parent;
 
-    @Column(name = "sort_order")
+    @TableField("sort_order")
     private Integer sortOrder;
 
+    /** 创建时间，插入时自动填充 */
+    @TableField(fill = FieldFill.INSERT)
     private LocalDateTime createTime;
-
-    @PrePersist
-    public void prePersist() {
-        this.createTime = LocalDateTime.now();
-    }
 }

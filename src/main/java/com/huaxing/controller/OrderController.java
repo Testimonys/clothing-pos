@@ -1,25 +1,18 @@
 package com.huaxing.controller;
 
+import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
+import com.baomidou.mybatisplus.core.metadata.IPage;
+import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
+import com.huaxing.config.PageUtils;
 import com.huaxing.dto.CreateOrderRequest;
-import com.huaxing.entity.Order;
-import com.huaxing.entity.OrderItem;
-import com.huaxing.entity.ProductSku;
-import com.huaxing.entity.StockRecord;
-import com.huaxing.entity.SysUser;
+import com.huaxing.entity.*;
 import com.huaxing.enums.PayMethod;
 import com.huaxing.enums.StockType;
+import com.huaxing.mapper.*;
 import com.huaxing.printer.EscPosPrinter;
-import com.huaxing.repository.OrderItemRepository;
-import com.huaxing.repository.OrderRepository;
-import com.huaxing.repository.ProductSkuRepository;
-import com.huaxing.repository.StockRecordRepository;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.data.domain.Page;
-import org.springframework.data.domain.PageRequest;
-import org.springframework.data.domain.Pageable;
-import org.springframework.data.domain.Sort;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.transaction.annotation.Transactional;
@@ -30,33 +23,36 @@ import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.time.LocalTime;
 import java.time.format.DateTimeFormatter;
-import java.util.ArrayList;
-import java.util.LinkedHashMap;
-import java.util.List;
-import java.util.Map;
+import java.util.*;
 
 @RestController
 @RequestMapping("/api/order")
 public class OrderController {
 
-    private final OrderRepository orderRepository;
-    private final OrderItemRepository orderItemRepository;
-    private final ProductSkuRepository productSkuRepository;
-    private final StockRecordRepository stockRecordRepository;
+    private final OrderMapper orderMapper;
+    private final OrderItemMapper orderItemMapper;
+    private final ProductSkuMapper productSkuMapper;
+    private final StockRecordMapper stockRecordMapper;
+    private final ProductMapper productMapper;
+    private final SysUserMapper sysUserMapper;
 
     private static final Logger log = LoggerFactory.getLogger(OrderController.class);
 
     @Autowired(required = false)
     private EscPosPrinter escPosPrinter;
 
-    public OrderController(OrderRepository orderRepository,
-                           OrderItemRepository orderItemRepository,
-                           ProductSkuRepository productSkuRepository,
-                           StockRecordRepository stockRecordRepository) {
-        this.orderRepository = orderRepository;
-        this.orderItemRepository = orderItemRepository;
-        this.productSkuRepository = productSkuRepository;
-        this.stockRecordRepository = stockRecordRepository;
+    public OrderController(OrderMapper orderMapper,
+                           OrderItemMapper orderItemMapper,
+                           ProductSkuMapper productSkuMapper,
+                           StockRecordMapper stockRecordMapper,
+                           ProductMapper productMapper,
+                           SysUserMapper sysUserMapper) {
+        this.orderMapper = orderMapper;
+        this.orderItemMapper = orderItemMapper;
+        this.productSkuMapper = productSkuMapper;
+        this.stockRecordMapper = stockRecordMapper;
+        this.productMapper = productMapper;
+        this.sysUserMapper = sysUserMapper;
     }
 
     /**
@@ -67,12 +63,10 @@ public class OrderController {
     @Transactional
     public ResponseEntity<?> create(@RequestBody CreateOrderRequest request,
                                     @AuthenticationPrincipal SysUser cashier) {
-        // 校验请求参数
         if (request.getItems() == null || request.getItems().isEmpty()) {
             return ResponseEntity.badRequest().body(Map.of("message", "订单明细不能为空"));
         }
 
-        // 校验支付方式
         PayMethod payMethod;
         try {
             payMethod = PayMethod.valueOf(request.getPayMethod().toUpperCase());
@@ -87,7 +81,7 @@ public class OrderController {
                 return ResponseEntity.badRequest().body(Map.of("message", "无效的订单项: skuId或qty不合法"));
             }
 
-            ProductSku sku = productSkuRepository.findById(item.getSkuId()).orElse(null);
+            ProductSku sku = productSkuMapper.selectById(item.getSkuId());
             if (sku == null) {
                 return ResponseEntity.badRequest().body(Map.of("message", "SKU不存在: " + item.getSkuId()));
             }
@@ -103,7 +97,7 @@ public class OrderController {
             skuList.add(sku);
         }
 
-        // 2. 生成单号 POS + yyyyMMdd + 4位序号（synchronized 防并发重复单号）
+        // 2. 生成单号 POS + yyyyMMdd + 4位序号
         String orderNo;
         try {
             orderNo = generateOrderNo();
@@ -120,9 +114,9 @@ public class OrderController {
                 .receiveAmount(request.getReceiveAmount() != null ? request.getReceiveAmount() : BigDecimal.ZERO)
                 .changeAmount(request.getChangeAmount() != null ? request.getChangeAmount() : BigDecimal.ZERO)
                 .payMethod(payMethod)
-                .cashier(cashier)
+                .cashierId(cashier != null ? cashier.getId() : null)
                 .build();
-        order = orderRepository.save(order);
+        orderMapper.insert(order);
 
         // 4. 逐个扣库存 → 写 OUTBOUND 流水 → 保存 OrderItem
         Long operatorId = cashier != null ? cashier.getId() : null;
@@ -135,8 +129,9 @@ public class OrderController {
             // 冗余商品名称和 SKU 规格
             String productName = "";
             String skuSpec = "";
-            if (sku.getProductId() != null) {
-                productName = sku.getProductId().getName();
+            Product product = productMapper.selectById(sku.getProductId());
+            if (product != null) {
+                productName = product.getName();
                 skuSpec = (sku.getColor() != null ? sku.getColor() : "")
                         + (sku.getSize() != null ? " / " + sku.getSize() : "");
             }
@@ -145,11 +140,11 @@ public class OrderController {
             int beforeQty = sku.getStockQty() != null ? sku.getStockQty() : 0;
             int afterQty = beforeQty - itemReq.getQty();
             sku.setStockQty(afterQty);
-            productSkuRepository.save(sku);
+            productSkuMapper.updateById(sku);
 
             // 写 OUTBOUND 流水
             StockRecord record = StockRecord.builder()
-                    .sku(sku)
+                    .skuId(sku.getId())
                     .productName(productName)
                     .skuSpec(skuSpec)
                     .type(StockType.OUTBOUND)
@@ -158,11 +153,11 @@ public class OrderController {
                     .afterQty(afterQty)
                     .operatorId(operatorId)
                     .build();
-            stockRecordRepository.save(record);
+            stockRecordMapper.insert(record);
 
             // 保存 OrderItem（冗余 productName + skuSpec）
             OrderItem orderItem = OrderItem.builder()
-                    .orderId(order)
+                    .orderId(order.getId())
                     .skuId(sku.getId())
                     .productName(productName)
                     .skuSpec(skuSpec)
@@ -172,7 +167,7 @@ public class OrderController {
                     .subTotal(itemReq.getSubTotal() != null ? itemReq.getSubTotal() : BigDecimal.ZERO)
                     .barcode(sku.getBarcode())
                     .build();
-            orderItemRepository.save(orderItem);
+            orderItemMapper.insert(orderItem);
 
             Map<String, Object> itemMap = new LinkedHashMap<>();
             itemMap.put("skuId", sku.getId());
@@ -184,7 +179,10 @@ public class OrderController {
         // 5. 触发打印（如 printReceipt=true 且打印机可用）
         if (request.isPrintReceipt() && escPosPrinter != null) {
             try {
-                escPosPrinter.printOrder(order, order.getItems());
+                // 加载订单明细用于打印
+                List<OrderItem> items = orderItemMapper.selectList(
+                        new LambdaQueryWrapper<OrderItem>().eq(OrderItem::getOrderId, order.getId()));
+                escPosPrinter.printOrder(order, items);
             } catch (Exception e) {
                 log.warn("打印小票失败: {}", e.getMessage());
             }
@@ -202,7 +200,7 @@ public class OrderController {
      * 订单列表：分页 + 时间范围 + 支付方式筛选，按时间倒序
      */
     @GetMapping
-    public ResponseEntity<Page<Map<String, Object>>> list(
+    public ResponseEntity<Map<String, Object>> list(
             @RequestParam(defaultValue = "0") int page,
             @RequestParam(defaultValue = "20") int size,
             @RequestParam(required = false) String startTime,
@@ -231,10 +229,21 @@ public class OrderController {
             }
         }
 
-        Pageable pageable = PageRequest.of(page, size, Sort.by(Sort.Direction.DESC, "createTime"));
-        Page<Order> orderPage = orderRepository.search(start, end, pm, pageable);
-        Page<Map<String, Object>> dtoPage = orderPage.map(this::toOrderSummary);
-        return ResponseEntity.ok(dtoPage);
+        LambdaQueryWrapper<Order> wrapper = new LambdaQueryWrapper<>();
+        if (start != null) {
+            wrapper.ge(Order::getCreateTime, start);
+        }
+        if (end != null) {
+            wrapper.le(Order::getCreateTime, end);
+        }
+        if (pm != null) {
+            wrapper.eq(Order::getPayMethod, pm);
+        }
+        wrapper.orderByDesc(Order::getCreateTime);
+
+        Page<Order> mpPage = new Page<>(page + 1, size);
+        IPage<Order> orderPage = orderMapper.selectPage(mpPage, wrapper);
+        return ResponseEntity.ok(PageUtils.convert(orderPage));
     }
 
     /**
@@ -244,24 +253,28 @@ public class OrderController {
     @GetMapping("/{id}")
     @Transactional(readOnly = true)
     public ResponseEntity<?> detail(@PathVariable Long id) {
-        return orderRepository.findById(id)
-                .map(order -> {
-                    // 触发懒加载 items
-                    if (order.getItems() != null) {
-                        order.getItems().size();
-                    }
-                    return ResponseEntity.ok(toOrderDetail(order));
-                })
-                .orElse(ResponseEntity.notFound().build());
+        Order order = orderMapper.selectById(id);
+        if (order == null) {
+            return ResponseEntity.notFound().build();
+        }
+        // 查询订单明细
+        List<OrderItem> items = orderItemMapper.selectList(
+                new LambdaQueryWrapper<OrderItem>().eq(OrderItem::getOrderId, id));
+        order.setItems(items);
+        // 查询收银员
+        if (order.getCashierId() != null) {
+            order.setCashier(sysUserMapper.selectById(order.getCashierId()));
+        }
+        return ResponseEntity.ok(toOrderDetail(order));
     }
 
     /**
      * POST /api/order/{id}/print
-     * 补打小票（当前为占位，Task14 实现打印后接入）
+     * 补打小票
      */
     @PostMapping("/{id}/print")
     public ResponseEntity<?> print(@PathVariable Long id) {
-        if (!orderRepository.existsById(id)) {
+        if (orderMapper.selectById(id) == null) {
             return ResponseEntity.notFound().build();
         }
 
@@ -269,17 +282,16 @@ public class OrderController {
             return ResponseEntity.ok(Map.of("message", "打印服务未启用（app.printer.enabled=false）"));
         }
 
-        Order order = orderRepository.findById(id).orElse(null);
+        Order order = orderMapper.selectById(id);
         if (order == null) {
             return ResponseEntity.notFound().build();
         }
 
-        // 触发懒加载 items
-        if (order.getItems() != null) {
-            order.getItems().size();
-        }
+        // 查询订单明细
+        List<OrderItem> items = orderItemMapper.selectList(
+                new LambdaQueryWrapper<OrderItem>().eq(OrderItem::getOrderId, id));
 
-        escPosPrinter.printOrder(order, order.getItems());
+        escPosPrinter.printOrder(order, items);
         return ResponseEntity.ok(Map.of("message", "补打指令已发送"));
     }
 
@@ -289,7 +301,7 @@ public class OrderController {
      */
     private synchronized String generateOrderNo() {
         LocalDateTime todayStart = LocalDateTime.of(LocalDate.now(), LocalTime.MIN);
-        Long countToday = orderRepository.countOrdersToday(todayStart);
+        Long countToday = orderMapper.countOrdersToday(todayStart);
         int seq = (countToday != null) ? countToday.intValue() + 1 : 1;
         if (seq > 9999) {
             throw new IllegalStateException("今日订单序号已用完（最大9999）");

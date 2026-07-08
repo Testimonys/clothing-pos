@@ -1,48 +1,45 @@
 package com.huaxing.entity;
 
-import jakarta.persistence.*;
+import com.baomidou.mybatisplus.annotation.*;
 import lombok.*;
 
 import java.time.LocalDateTime;
 
-@Entity
-@Table(name = "product_sku")
+@TableName("product_sku")
 @Data
 @NoArgsConstructor
 @AllArgsConstructor
 @Builder
 public class ProductSku {
 
-    @Id
-    @GeneratedValue(strategy = GenerationType.IDENTITY)
+    @TableId(type = IdType.AUTO)
     private Long id;
 
-    @ManyToOne(fetch = FetchType.LAZY)
-    @JoinColumn(name = "product_id", nullable = false)
-    @ToString.Exclude
-    @EqualsAndHashCode.Exclude
-    private Product productId;
+    /** 商品 ID 外键 */
+    @TableField("product_id")
+    private Long productId;
 
-    @Column(length = 50)
+    /** 商品实体（非数据库字段，手动填充） */
+    @TableField(exist = false)
+    private Product product;
+
     private String color;
 
-    @Column(length = 50)
+    @TableField("`size`")
     private String size;
 
-    @Column(length = 100, unique = true)
+    @TableField("barcode")
     private String barcode;
 
-    @Column(name = "stock_qty")
+    @TableField("stock_qty")
     private Integer stockQty;
 
+    /** 乐观锁版本号 */
     @Version
-    @Column(name = "version")
-    private Long version = 0L;
+    @TableField("version")
+    private Long version;
 
+    /** 创建时间，插入时自动填充 */
+    @TableField(fill = FieldFill.INSERT)
     private LocalDateTime createTime;
-
-    @PrePersist
-    public void prePersist() {
-        this.createTime = LocalDateTime.now();
-    }
 }

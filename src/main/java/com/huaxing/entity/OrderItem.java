@@ -1,49 +1,47 @@
 package com.huaxing.entity;
 
-import jakarta.persistence.*;
+import com.baomidou.mybatisplus.annotation.*;
 import lombok.*;
 
 import java.math.BigDecimal;
 
-@Entity
-@Table(name = "order_item")
+@TableName("order_item")
 @Data
 @NoArgsConstructor
 @AllArgsConstructor
 @Builder
 public class OrderItem {
 
-    @Id
-    @GeneratedValue(strategy = GenerationType.IDENTITY)
+    @TableId(type = IdType.AUTO)
     private Long id;
 
-    @ManyToOne(fetch = FetchType.LAZY)
-    @JoinColumn(name = "order_id", nullable = false)
-    @ToString.Exclude
-    @EqualsAndHashCode.Exclude
-    private Order orderId;
+    /** 订单 ID 外键 */
+    @TableField("order_id")
+    private Long orderId;
 
-    @Column(name = "sku_id", nullable = false)
+    /** 订单实体（非数据库字段，手动填充） */
+    @TableField(exist = false)
+    private Order order;
+
+    /** SKU ID（仅存 ID，不关联实体） */
+    @TableField("sku_id")
     private Long skuId;
 
-    @Column(name = "product_name", nullable = false, length = 200)
+    @TableField("product_name")
     private String productName;
 
-    @Column(name = "sku_spec", nullable = false, length = 100)
+    @TableField("sku_spec")
     private String skuSpec;
 
-    @Column(name = "unit_price", precision = 10, scale = 2, nullable = false)
+    @TableField("unit_price")
     private BigDecimal unitPrice;
 
-    @Column(nullable = false)
     private Integer qty;
 
-    @Column(precision = 10, scale = 2, nullable = false)
     private BigDecimal discount;
 
-    @Column(name = "sub_total", precision = 10, scale = 2, nullable = false)
+    @TableField("sub_total")
     private BigDecimal subTotal;
 
-    @Column(length = 100)
     private String barcode;
 }

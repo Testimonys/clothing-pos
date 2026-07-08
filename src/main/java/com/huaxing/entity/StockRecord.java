@@ -1,55 +1,49 @@
 package com.huaxing.entity;
 
+import com.baomidou.mybatisplus.annotation.*;
 import com.huaxing.enums.StockType;
-import jakarta.persistence.*;
 import lombok.*;
 
 import java.time.LocalDateTime;
 
-@Entity
-@Table(name = "stock_record")
+@TableName("stock_record")
 @Data
 @NoArgsConstructor
 @AllArgsConstructor
 @Builder
 public class StockRecord {
 
-    @Id
-    @GeneratedValue(strategy = GenerationType.IDENTITY)
+    @TableId(type = IdType.AUTO)
     private Long id;
 
-    @ManyToOne(fetch = FetchType.LAZY)
-    @JoinColumn(name = "sku_id", nullable = false)
-    @ToString.Exclude
-    @EqualsAndHashCode.Exclude
+    /** SKU ID 外键 */
+    @TableField("sku_id")
+    private Long skuId;
+
+    /** SKU 实体（非数据库字段，手动填充） */
+    @TableField(exist = false)
     private ProductSku sku;
 
-    @Column(name = "product_name", nullable = false, length = 200)
+    @TableField("product_name")
     private String productName;
 
-    @Column(name = "sku_spec", nullable = false, length = 100)
+    @TableField("sku_spec")
     private String skuSpec;
 
-    @Enumerated(EnumType.STRING)
-    @Column(length = 20, nullable = false)
     private StockType type;
 
-    @Column(nullable = false)
     private Integer qty;
 
-    @Column(name = "before_qty", nullable = false)
+    @TableField("before_qty")
     private Integer beforeQty;
 
-    @Column(name = "after_qty", nullable = false)
+    @TableField("after_qty")
     private Integer afterQty;
 
-    @Column(name = "operator_id")
+    @TableField("operator_id")
     private Long operatorId;
 
+    /** 创建时间，插入时自动填充 */
+    @TableField(fill = FieldFill.INSERT)
     private LocalDateTime createTime;
-
-    @PrePersist
-    public void prePersist() {
-        this.createTime = LocalDateTime.now();
-    }
 }

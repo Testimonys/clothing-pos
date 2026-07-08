@@ -1,65 +1,60 @@
 package com.huaxing.entity;
 
+import com.baomidou.mybatisplus.annotation.*;
 import com.huaxing.enums.PayMethod;
-import jakarta.persistence.*;
 import lombok.*;
 
 import java.math.BigDecimal;
 import java.time.LocalDateTime;
 import java.util.List;
 
-@Entity
-@Table(name = "sys_order")
+@TableName("sys_order")
 @Data
 @NoArgsConstructor
 @AllArgsConstructor
 @Builder
 public class Order {
 
-    @Id
-    @GeneratedValue(strategy = GenerationType.IDENTITY)
+    @TableId(type = IdType.AUTO)
     private Long id;
 
-    @Column(name = "order_no", nullable = false, unique = true, length = 30)
+    @TableField("order_no")
     private String orderNo;
 
-    @Column(name = "total_amount", precision = 10, scale = 2, nullable = false)
+    @TableField("total_amount")
     private BigDecimal totalAmount;
 
-    @Column(precision = 10, scale = 2, nullable = false)
     private BigDecimal discount;
 
-    @Column(name = "pay_amount", precision = 10, scale = 2, nullable = false)
+    @TableField("pay_amount")
     private BigDecimal payAmount;
 
-    @Column(name = "receive_amount", precision = 10, scale = 2, nullable = false)
+    @TableField("receive_amount")
     private BigDecimal receiveAmount;
 
-    @Column(name = "change_amount", precision = 10, scale = 2, nullable = false)
+    @TableField("change_amount")
     private BigDecimal changeAmount;
 
-    @Enumerated(EnumType.STRING)
-    @Column(name = "pay_method", length = 20, nullable = false)
+    @TableField("pay_method")
     private PayMethod payMethod;
 
-    @ManyToOne(fetch = FetchType.LAZY)
-    @JoinColumn(name = "cashier_id")
-    @ToString.Exclude
-    @EqualsAndHashCode.Exclude
+    /** 收银员 ID 外键 */
+    @TableField("cashier_id")
+    private Long cashierId;
+
+    /** 收银员实体（非数据库字段，手动填充） */
+    @TableField(exist = false)
     private SysUser cashier;
 
-    @Column(name = "member_id")
+    /** 会员 ID（预留） */
+    @TableField("member_id")
     private Long memberId;
 
+    /** 创建时间，插入时自动填充 */
+    @TableField(fill = FieldFill.INSERT)
     private LocalDateTime createTime;
 
-    @OneToMany(mappedBy = "orderId", cascade = CascadeType.ALL, orphanRemoval = true)
-    @ToString.Exclude
-    @EqualsAndHashCode.Exclude
+    /** 订单明细列表（非数据库字段，手动填充） */
+    @TableField(exist = false)
     private List<OrderItem> items;
-
-    @PrePersist
-    public void prePersist() {
-        this.createTime = LocalDateTime.now();
-    }
 }

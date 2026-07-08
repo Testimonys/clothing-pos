@@ -1,1 +1,0 @@
-import{_ as t,o as s,c,j as o}from"./index-TT33majt.js";const n={},r={style:{padding:"24px"}};function a(l,e){return s(),c("div",r,[...e[0]||(e[0]=[o("h2",null,"库存管理",-1),o("p",{style:{color:"#999"}},"此页面正在开发中...",-1)])])}const d=t(n,[["render",a]]);export{d as default};

@@ -1,44 +1,34 @@
 package com.huaxing.entity;
 
+import com.baomidou.mybatisplus.annotation.*;
 import com.huaxing.enums.UserRole;
-import jakarta.persistence.*;
 import lombok.*;
 
 import java.time.LocalDateTime;
 
-@Entity
-@Table(name = "sys_user")
+@TableName("sys_user")
 @Data
 @NoArgsConstructor
 @AllArgsConstructor
 @Builder
 public class SysUser {
 
-    @Id
-    @GeneratedValue(strategy = GenerationType.IDENTITY)
+    @TableId(type = IdType.AUTO)
     private Long id;
 
-    @Column(nullable = false, unique = true, length = 50)
     private String username;
 
-    @Column(nullable = false, length = 200)
     private String password;
 
-    @Column(name = "display_name", nullable = false, length = 50)
+    @TableField("display_name")
     private String displayName;
 
-    @Enumerated(EnumType.STRING)
-    @Column(length = 20, nullable = false)
     private UserRole role;
 
-    @Column(nullable = false)
     @Builder.Default
     private Boolean enabled = true;
 
+    /** 创建时间，插入时自动填充 */
+    @TableField(fill = FieldFill.INSERT)
     private LocalDateTime createTime;
-
-    @PrePersist
-    public void prePersist() {
-        this.createTime = LocalDateTime.now();
-    }
 }

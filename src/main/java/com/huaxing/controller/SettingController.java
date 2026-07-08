@@ -3,7 +3,7 @@ package com.huaxing.controller;
 import com.huaxing.dto.CreateUserRequest;
 import com.huaxing.dto.UserDTO;
 import com.huaxing.entity.SysUser;
-import com.huaxing.repository.SysUserRepository;
+import com.huaxing.mapper.SysUserMapper;
 import com.huaxing.service.BackupService;
 import org.springframework.core.io.Resource;
 import org.springframework.http.HttpHeaders;
@@ -20,14 +20,14 @@ import java.util.stream.Collectors;
 @RequestMapping("/api/setting")
 public class SettingController {
 
-    private final SysUserRepository sysUserRepository;
+    private final SysUserMapper sysUserMapper;
     private final PasswordEncoder passwordEncoder;
     private final BackupService backupService;
 
-    public SettingController(SysUserRepository sysUserRepository,
+    public SettingController(SysUserMapper sysUserMapper,
                              PasswordEncoder passwordEncoder,
                              BackupService backupService) {
-        this.sysUserRepository = sysUserRepository;
+        this.sysUserMapper = sysUserMapper;
         this.passwordEncoder = passwordEncoder;
         this.backupService = backupService;
     }
@@ -36,7 +36,7 @@ public class SettingController {
 
     @GetMapping("/users")
     public ResponseEntity<List<UserDTO>> list() {
-        List<UserDTO> users = sysUserRepository.findAll().stream()
+        List<UserDTO> users = sysUserMapper.selectList(null).stream()
                 .map(this::toDTO)
                 .collect(Collectors.toList());
         return ResponseEntity.ok(users);
@@ -44,7 +44,7 @@ public class SettingController {
 
     @PostMapping("/users")
     public ResponseEntity<?> create(@RequestBody CreateUserRequest request) {
-        if (sysUserRepository.existsByUsername(request.getUsername())) {
+        if (sysUserMapper.existsByUsername(request.getUsername())) {
             return ResponseEntity.badRequest().body(Map.of("message", "用户名已存在"));
         }
 
@@ -54,34 +54,34 @@ public class SettingController {
                 .displayName(request.getDisplayName())
                 .role(request.getRole())
                 .build();
-        user = sysUserRepository.save(user);
+        sysUserMapper.insert(user);
         return ResponseEntity.ok(toDTO(user));
     }
 
     @PutMapping("/users/{id}")
     public ResponseEntity<?> update(@PathVariable Long id, @RequestBody CreateUserRequest request) {
-        return sysUserRepository.findById(id)
-                .map(user -> {
-                    user.setUsername(request.getUsername());
-                    if (request.getPassword() != null && !request.getPassword().isBlank()) {
-                        user.setPassword(passwordEncoder.encode(request.getPassword()));
-                    }
-                    user.setDisplayName(request.getDisplayName());
-                    user.setRole(request.getRole());
-                    sysUserRepository.save(user);
-                    return ResponseEntity.ok(toDTO(user));
-                })
-                .orElse(ResponseEntity.notFound().build());
+        SysUser user = sysUserMapper.selectById(id);
+        if (user == null) {
+            return ResponseEntity.notFound().build();
+        }
+        user.setUsername(request.getUsername());
+        if (request.getPassword() != null && !request.getPassword().isBlank()) {
+            user.setPassword(passwordEncoder.encode(request.getPassword()));
+        }
+        user.setDisplayName(request.getDisplayName());
+        user.setRole(request.getRole());
+        sysUserMapper.updateById(user);
+        return ResponseEntity.ok(toDTO(user));
     }
 
     @DeleteMapping("/users/{id}")
     public ResponseEntity<?> delete(@PathVariable Long id) {
-        return sysUserRepository.findById(id)
-                .map(user -> {
-                    sysUserRepository.delete(user);
-                    return ResponseEntity.ok(Map.of("message", "删除成功"));
-                })
-                .orElse(ResponseEntity.notFound().build());
+        SysUser user = sysUserMapper.selectById(id);
+        if (user == null) {
+            return ResponseEntity.notFound().build();
+        }
+        sysUserMapper.deleteById(id);
+        return ResponseEntity.ok(Map.of("message", "删除成功"));
     }
 
     // ================= 数据备份 =================

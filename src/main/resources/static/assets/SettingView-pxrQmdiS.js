@@ -1,1 +1,0 @@
-import{_ as o,o as s,c as n,j as t}from"./index-DbWKxzTF.js";const r={},c={style:{padding:"24px"}};function a(l,e){return s(),n("div",c,[...e[0]||(e[0]=[t("h2",null,"系统设置",-1),t("p",{style:{color:"#999"}},"此页面正在开发中...",-1)])])}const d=o(r,[["render",a]]);export{d as default};

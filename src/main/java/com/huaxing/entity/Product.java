@@ -1,59 +1,50 @@
 package com.huaxing.entity;
 
-import jakarta.persistence.*;
+import com.baomidou.mybatisplus.annotation.*;
 import lombok.*;
 
 import java.math.BigDecimal;
 import java.time.LocalDateTime;
 import java.util.List;
 
-@Entity
-@Table(name = "product")
+@TableName("product")
 @Data
 @NoArgsConstructor
 @AllArgsConstructor
 @Builder
 public class Product {
 
-    @Id
-    @GeneratedValue(strategy = GenerationType.IDENTITY)
+    @TableId(type = IdType.AUTO)
     private Long id;
 
-    @ManyToOne(fetch = FetchType.LAZY)
-    @JoinColumn(name = "category_id")
-    @ToString.Exclude
-    @EqualsAndHashCode.Exclude
+    /** 分类 ID 外键 */
+    @TableField("category_id")
+    private Long categoryId;
+
+    /** 分类实体（非数据库字段，手动填充） */
+    @TableField(exist = false)
     private Category category;
 
-    @Column(nullable = false, length = 200)
     private String name;
 
-    @Column(name = "image_url", length = 500)
+    @TableField("image_url")
     private String imageUrl;
 
-    @Column(name = "cost_price", precision = 10, scale = 2)
+    @TableField("cost_price")
     private BigDecimal costPrice;
 
-    @Column(name = "sell_price", precision = 10, scale = 2)
+    @TableField("sell_price")
     private BigDecimal sellPrice;
 
+    /** 创建时间，插入时自动填充 */
+    @TableField(fill = FieldFill.INSERT)
     private LocalDateTime createTime;
 
+    /** 更新时间，插入和更新时自动填充 */
+    @TableField(fill = FieldFill.INSERT_UPDATE)
     private LocalDateTime updateTime;
 
-    @OneToMany(mappedBy = "productId", cascade = CascadeType.ALL, orphanRemoval = true)
-    @ToString.Exclude
-    @EqualsAndHashCode.Exclude
+    /** SKU 列表（非数据库字段，手动填充） */
+    @TableField(exist = false)
     private List<ProductSku> skus;
-
-    @PrePersist
-    public void prePersist() {
-        this.createTime = LocalDateTime.now();
-        this.updateTime = LocalDateTime.now();
-    }
-
-    @PreUpdate
-    public void preUpdate() {
-        this.updateTime = LocalDateTime.now();
-    }
 }

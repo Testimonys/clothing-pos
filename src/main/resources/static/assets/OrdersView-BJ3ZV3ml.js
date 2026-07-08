@@ -1,1 +1,0 @@
-import{_ as s,o as t,c as r,j as o}from"./index-RK8fe9P8.js";const n={},c={style:{padding:"24px"}};function a(d,e){return t(),r("div",c,[...e[0]||(e[0]=[o("h2",null,"订单管理",-1),o("p",{style:{color:"#999"}},"此页面正在开发中...",-1)])])}const _=s(n,[["render",a]]);export{_ as default};

@@ -5,7 +5,7 @@ import com.huaxing.dto.LoginRequest;
 import com.huaxing.dto.LoginResponse;
 import com.huaxing.dto.UserInfo;
 import com.huaxing.entity.SysUser;
-import com.huaxing.repository.SysUserRepository;
+import com.huaxing.mapper.SysUserMapper;
 import jakarta.validation.Valid;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
@@ -18,21 +18,21 @@ import java.util.Map;
 @RequestMapping("/api/auth")
 public class AuthController {
 
-    private final SysUserRepository sysUserRepository;
+    private final SysUserMapper sysUserMapper;
     private final PasswordEncoder passwordEncoder;
     private final JwtUtil jwtUtil;
 
-    public AuthController(SysUserRepository sysUserRepository,
+    public AuthController(SysUserMapper sysUserMapper,
                           PasswordEncoder passwordEncoder,
                           JwtUtil jwtUtil) {
-        this.sysUserRepository = sysUserRepository;
+        this.sysUserMapper = sysUserMapper;
         this.passwordEncoder = passwordEncoder;
         this.jwtUtil = jwtUtil;
     }
 
     @PostMapping("/login")
     public ResponseEntity<?> login(@Valid @RequestBody LoginRequest request) {
-        var userOpt = sysUserRepository.findByUsername(request.getUsername());
+        var userOpt = sysUserMapper.findByUsername(request.getUsername());
         if (userOpt.isEmpty()) {
             return ResponseEntity.status(401).body(Map.of("message", "用户名或密码错误"));
         }
