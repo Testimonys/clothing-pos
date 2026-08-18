@@ -16,20 +16,16 @@
           </template>
         </el-input>
 
-        <el-select
+        <el-tree-select
           v-model="categoryId"
+          :data="categoryTree"
+          :props="treeProps"
           placeholder="全部分类"
           clearable
+          check-strictly
           style="width: 180px; margin-left: 12px"
           @change="handleSearch"
-        >
-          <el-option
-            v-for="cat in categories"
-            :key="cat.id"
-            :label="cat.name"
-            :value="cat.id"
-          />
-        </el-select>
+        />
 
         <el-button type="primary" style="margin-left: 12px" @click="handleSearch">
           <el-icon><Search /></el-icon>
@@ -172,19 +168,15 @@
           </el-col>
           <el-col :span="12">
             <el-form-item label="分类" prop="categoryId">
-              <el-select
+              <el-tree-select
                 v-model="form.categoryId"
+                :data="categoryTree"
+                :props="treeProps"
                 placeholder="选择分类"
                 clearable
+                check-strictly
                 style="width: 100%"
-              >
-                <el-option
-                  v-for="cat in categories"
-                  :key="cat.id"
-                  :label="cat.name"
-                  :value="cat.id"
-                />
-              </el-select>
+              />
             </el-form-item>
           </el-col>
         </el-row>
@@ -336,6 +328,64 @@ const authStore = useAuthStore()
 const keyword = ref('')
 const categoryId = ref<number | null>(null)
 const categories = ref<CategoryDTO[]>([])
+
+// 树形下拉配置（与分类管理页一致）
+const treeProps = {
+  children: 'children',
+  label: 'name',
+  value: 'id'
+}
+
+interface TreeNode {
+  id: number
+  name: string
+  parentId: number | null
+  sortOrder?: number
+  children?: TreeNode[]
+}
+
+/** 将扁平分类列表转为树形结构（与分类管理页一致） */
+function buildCategoryTree(flatList: CategoryDTO[]): TreeNode[] {
+  const map = new Map<number, TreeNode>()
+  const roots: TreeNode[] = []
+
+  for (const cat of flatList) {
+    if (cat.id == null) continue
+    map.set(cat.id, {
+      id: cat.id,
+      name: cat.name ?? '',
+      parentId: cat.parentId ?? null,
+      sortOrder: cat.sortOrder ?? 0,
+      children: []
+    })
+  }
+
+  for (const cat of flatList) {
+    if (cat.id == null) continue
+    const node = map.get(cat.id)!
+    if (cat.parentId != null && map.has(cat.parentId)) {
+      const parent = map.get(cat.parentId)!
+      parent.children!.push(node)
+    } else {
+      roots.push(node)
+    }
+  }
+
+  function sortTree(nodes: TreeNode[]) {
+    nodes.sort((a, b) => (a.sortOrder ?? 0) - (b.sortOrder ?? 0))
+    for (const n of nodes) {
+      if (n.children && n.children.length > 0) {
+        sortTree(n.children)
+      }
+    }
+  }
+  sortTree(roots)
+
+  return roots
+}
+
+/** 树形分类（计算属性） */
+const categoryTree = computed<TreeNode[]>(() => buildCategoryTree(categories.value))
 
 // ---- 分页 ----
 const page = ref(0)

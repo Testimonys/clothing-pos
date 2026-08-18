@@ -2,10 +2,10 @@
   <div>
     <el-container>
       <el-header>
-        <h1>AI 项目</h1>
+        <h1>华兴鞋服城</h1>
       </el-header>
       <el-main>
-        <p>欢迎使用 AI 项目管理系统</p>
+        <p>欢迎使用华兴鞋服城管理系统</p>
       </el-main>
     </el-container>
   </div>

@@ -3,14 +3,18 @@
     <!-- 侧边栏 -->
     <el-aside width="220px" class="sidebar">
       <div class="logo">
-        <h2>华兴鞋服城</h2>
+        <el-icon class="logo-icon"><Goods /></el-icon>
+        <div class="logo-text">
+          <h2>华兴鞋服城</h2>
+          <span class="logo-sub">服装零售管理系统</span>
+        </div>
       </div>
       <el-menu
         :default-active="activeMenu"
         router
-        background-color="#304156"
-        text-color="#bfcbd9"
-        active-text-color="#409EFF"
+        background-color="#3a1e23"
+        text-color="#c9b4ba"
+        active-text-color="#f6ecee"
       >
         <el-menu-item index="/pos">
           <el-icon><Sell /></el-icon>
@@ -101,22 +105,52 @@ async function handleLogout() {
 }
 
 .sidebar {
-  background-color: #304156;
+  background-color: #3a1e23;
   overflow-y: auto;
 }
 
 .logo {
-  height: 60px;
+  height: 64px;
+  display: flex;
+  align-items: center;
+  justify-content: flex-start;
+  gap: 10px;
+  padding: 0 16px;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+.logo-icon {
+  width: 36px;
+  height: 36px;
+  border-radius: 10px;
+  background: linear-gradient(135deg, #a8585f, #7a2f3e);
+  color: #fff;
+  font-size: 20px;
+  flex-shrink: 0;
   display: flex;
   align-items: center;
   justify-content: center;
-  border-bottom: 1px solid rgba(255, 255, 255, 0.1);
 }
 
-.logo h2 {
+.logo-text {
+  line-height: 1.1;
+}
+
+.logo-text h2 {
   color: #fff;
-  font-size: 18px;
+  font-size: 16px;
+  font-weight: 600;
+  letter-spacing: 1px;
   margin: 0;
+  white-space: nowrap;
+}
+
+.logo-sub {
+  display: block;
+  color: #8f6a72;
+  font-size: 10px;
+  letter-spacing: 2px;
+  margin-top: 3px;
   white-space: nowrap;
 }
 
@@ -124,12 +158,33 @@ async function handleLogout() {
   border-right: none;
 }
 
+.sidebar :deep(.el-menu-item) {
+  height: 48px;
+  margin: 2px 8px;
+  border-radius: 8px;
+  transition: background-color 0.2s cubic-bezier(0.4, 0, 0.2, 1), color 0.2s;
+}
+
+.sidebar :deep(.el-menu-item:hover) {
+  background-color: rgba(255, 255, 255, 0.06);
+  color: #f6ecee;
+}
+
+.sidebar :deep(.el-menu-item.is-active) {
+  background: linear-gradient(90deg, rgba(168, 88, 95, 0.35), rgba(168, 88, 95, 0.12));
+  color: #f6ecee;
+}
+
+.sidebar :deep(.el-menu-item.is-active .el-icon) {
+  color: #e8b7a3;
+}
+
 .header {
   display: flex;
   align-items: center;
   justify-content: space-between;
   background: #fff;
-  border-bottom: 1px solid #e6e6e6;
+  border-bottom: 1px solid var(--border-color, #e6e6e6);
   padding: 0 20px;
   height: 60px;
 }
@@ -141,7 +196,7 @@ async function handleLogout() {
 
 .welcome-text {
   font-size: 14px;
-  color: #333;
+  color: var(--text-primary, #333);
   display: flex;
   align-items: center;
 }
@@ -152,7 +207,7 @@ async function handleLogout() {
 }
 
 .el-main {
-  background: #f0f2f5;
+  background: #fbf7f7;
   padding: 0;
 }
 </style>

@@ -3,6 +3,10 @@
 -- Database: clothing_pos
 -- ============================================================
 
+-- 确保任意客户端（含 MySQL docker-entrypoint 默认 latin1 连接）执行时
+-- 中文字符集正确，避免双重编码乱码
+SET NAMES utf8mb4;
+
 -- 商品分类
 CREATE TABLE IF NOT EXISTS category (
     id BIGINT AUTO_INCREMENT PRIMARY KEY,

@@ -403,17 +403,17 @@ async function handleCheckout() {
       productName: item.productName,
       barcode: item.barcode,
       skuSpec: item.skuSpec,
-      quantity: item.quantity,
+      qty: item.quantity,
       unitPrice: item.unitPrice,
       discount: item.discount,
-      subtotal: item.subtotal
+      subTotal: item.subtotal
     })),
     totalAmount: totalAmount.value,
-    discountAmount: orderDiscount.value,
-    receivableAmount: receivable.value,
-    receivedAmount: received,
+    discount: orderDiscount.value,
+    payAmount: receivable.value,
+    receiveAmount: received,
     changeAmount: changeAmount.value,
-    paymentMethod: paymentMethod.value,
+    payMethod: paymentMethod.value,
     printReceipt: printReceipt.value
   }
 

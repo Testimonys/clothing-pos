@@ -10,7 +10,6 @@ import java.util.List;
 import java.util.stream.Collectors;
 
 @RestController
-@RequestMapping("/api/setting/categories")
 public class CategoryController {
 
     private final CategoryMapper categoryMapper;
@@ -19,7 +18,12 @@ public class CategoryController {
         this.categoryMapper = categoryMapper;
     }
 
-    @GetMapping
+    /**
+     * GET /api/categories
+     * 分类只读列表，所有登录用户可用（商品页/收银台需要选分类）。
+     * 不放在 /api/setting/** 下，避免被 BOSS 角色锁定。
+     */
+    @GetMapping("/api/categories")
     public ResponseEntity<List<CategoryDTO>> list() {
         List<CategoryDTO> list = categoryMapper.selectList(null).stream()
                 .map(this::toDTO)
@@ -27,7 +31,16 @@ public class CategoryController {
         return ResponseEntity.ok(list);
     }
 
-    @PostMapping
+    /**
+     * GET /api/setting/categories
+     * 分类管理列表（BOSS 专属，用于系统设置页），复用同一查询逻辑
+     */
+    @GetMapping("/api/setting/categories")
+    public ResponseEntity<List<CategoryDTO>> listForSetting() {
+        return list();
+    }
+
+    @PostMapping("/api/setting/categories")
     public ResponseEntity<CategoryDTO> create(@RequestBody CategoryDTO dto) {
         Category category = new Category();
         category.setName(dto.getName());
@@ -37,7 +50,7 @@ public class CategoryController {
         return ResponseEntity.ok(toDTO(category));
     }
 
-    @PutMapping("/{id}")
+    @PutMapping("/api/setting/categories/{id}")
     public ResponseEntity<?> update(@PathVariable Long id, @RequestBody CategoryDTO dto) {
         Category category = categoryMapper.selectById(id);
         if (category == null) {

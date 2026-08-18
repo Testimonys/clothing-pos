@@ -132,7 +132,7 @@ export function generateBarcode(
     .then((res) => res.data)
 }
 
-/** 获取分类列表 */
+/** 获取分类列表（所有登录用户可用） */
 export function listCategories(): Promise<CategoryDTO[]> {
-  return request.get('/setting/categories').then((res) => res.data)
+  return request.get('/categories').then((res) => res.data)
 }

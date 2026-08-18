@@ -47,8 +47,40 @@ public class StockController {
         // MyBatis-Plus 分页从第1页开始
         Page<ProductSku> mpPage = new Page<>(page + 1, size);
         IPage<ProductSku> skuPage = productSkuMapper.selectPage(mpPage, null);
+
+        // 批量查询商品名称，避免 N+1 查询
+        List<ProductSku> records = skuPage.getRecords();
+        Map<Long, String> productNameMap = new HashMap<>();
+        if (records != null && !records.isEmpty()) {
+            Set<Long> productIds = records.stream()
+                    .map(ProductSku::getProductId)
+                    .filter(Objects::nonNull)
+                    .collect(Collectors.toSet());
+            if (!productIds.isEmpty()) {
+                productNameMap = productMapper.selectBatchIds(productIds).stream()
+                        .collect(Collectors.toMap(Product::getId, Product::getName));
+            }
+        }
+
+        // 转换为前端期望的字段结构（skuId / productName）
+        List<Map<String, Object>> content = new ArrayList<>();
+        if (records != null) {
+            for (ProductSku sku : records) {
+                Map<String, Object> m = new LinkedHashMap<>();
+                m.put("skuId", sku.getId());
+                m.put("productId", sku.getProductId());
+                m.put("productName", productNameMap.getOrDefault(sku.getProductId(), ""));
+                m.put("color", sku.getColor());
+                m.put("size", sku.getSize());
+                m.put("barcode", sku.getBarcode());
+                m.put("stockQty", sku.getStockQty());
+                m.put("createTime", sku.getCreateTime());
+                content.add(m);
+            }
+        }
+
         // 转换为 Spring Data Page 格式
-        return ResponseEntity.ok(PageUtils.convert(skuPage));
+        return ResponseEntity.ok(PageUtils.convertWithRecords(skuPage, content));
     }
 
     /**

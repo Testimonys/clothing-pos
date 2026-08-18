@@ -243,7 +243,34 @@ public class OrderController {
 
         Page<Order> mpPage = new Page<>(page + 1, size);
         IPage<Order> orderPage = orderMapper.selectPage(mpPage, wrapper);
-        return ResponseEntity.ok(PageUtils.convert(orderPage));
+
+        // 批量查询收银员信息并填充（列表接口需展示收银员，避免 N+1 查询）
+        List<Order> records = orderPage.getRecords();
+        if (records != null && !records.isEmpty()) {
+            Set<Long> cashierIds = new HashSet<>();
+            for (Order o : records) {
+                if (o.getCashierId() != null) {
+                    cashierIds.add(o.getCashierId());
+                }
+            }
+            if (!cashierIds.isEmpty()) {
+                Map<Long, SysUser> userMap = new HashMap<>();
+                for (SysUser u : sysUserMapper.selectBatchIds(cashierIds)) {
+                    userMap.put(u.getId(), u);
+                }
+                for (Order o : records) {
+                    o.setCashier(userMap.get(o.getCashierId()));
+                }
+            }
+        }
+
+        List<Map<String, Object>> content = new ArrayList<>();
+        if (records != null) {
+            for (Order order : records) {
+                content.add(toOrderSummary(order));
+            }
+        }
+        return ResponseEntity.ok(PageUtils.convertWithRecords(orderPage, content));
     }
 
     /**

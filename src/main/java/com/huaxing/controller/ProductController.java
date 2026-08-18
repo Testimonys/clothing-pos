@@ -58,7 +58,27 @@ public class ProductController {
 
         Page<Product> mpPage = new Page<>(page + 1, size);
         IPage<Product> productPage = productMapper.selectPage(mpPage, wrapper);
-        return ResponseEntity.ok(PageUtils.convert(productPage));
+
+        // 转换为 DTO（填充 categoryName），并批量查询 SKU 填充规格标签，避免 N+1 查询
+        List<Product> records = productPage.getRecords();
+        List<ProductDTO> content = new ArrayList<>();
+        if (records != null && !records.isEmpty()) {
+            // 批量查询本页涉及的商品，一次性取出 SKU
+            Map<Long, List<ProductSku>> skusByProduct = productSkuMapper.selectList(
+                    new LambdaQueryWrapper<ProductSku>().in(ProductSku::getProductId,
+                            records.stream().map(Product::getId).collect(Collectors.toList())))
+                    .stream()
+                    .collect(Collectors.groupingBy(ProductSku::getProductId));
+
+            for (Product product : records) {
+                ProductDTO dto = toDTO(product);
+                dto.setSkus(skusByProduct.getOrDefault(product.getId(), Collections.emptyList())
+                        .stream().map(this::toSkuDTO).collect(Collectors.toList()));
+                content.add(dto);
+            }
+        }
+
+        return ResponseEntity.ok(PageUtils.convertWithRecords(productPage, content));
     }
 
     /**
