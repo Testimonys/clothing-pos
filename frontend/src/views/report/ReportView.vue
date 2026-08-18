@@ -292,23 +292,28 @@ function renderCharts() {
 
 // ---- 加载数据 ----
 async function loadAll() {
+  if (!dateRange.value || dateRange.value.length < 2) {
+    ElMessage.warning('请选择日期范围')
+    return
+  }
+  const [start, end] = dateRange.value
   loading.value = true
   try {
     const [summary, top, category] = await Promise.all([
       getSummary({
-        start: dateRange.value[0],
-        end: dateRange.value[1],
+        start,
+        end,
         granularity: granularity.value
       }),
       getTopProducts({
-        start: dateRange.value[0],
-        end: dateRange.value[1],
+        start,
+        end,
         limit: 10,
         orderBy: 'qty'
       }),
       getCategory({
-        start: dateRange.value[0],
-        end: dateRange.value[1]
+        start,
+        end
       })
     ])
     summaryData.value = summary

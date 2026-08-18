@@ -128,3 +128,4 @@ com.huaxing
 - 实体间关联（`@ManyToOne`/`@OneToMany`）已迁移为 MyBatis-Plus 的 `@TableField(exist = false)` + 手动查询
 - 级联保存（如 Product → SKU）需手动分步 insert，使用 `@Transactional` 保证原子性
 - 前端 dist 和后端 target 目录不提交到 git
+- 报表毛利按当前 `product.cost_price` 计算；若商品/SKU 被删除，历史订单该明细成本按 0 计、毛利会被高估（order_item.sku_id 无外键，删除路径可达；要精确需下单时成本快照，暂不做）

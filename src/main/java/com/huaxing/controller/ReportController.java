@@ -183,12 +183,14 @@ public class ReportController {
 
         Comparator<Map<String, Object>> comparator;
         if ("sales".equals(orderBy)) {
-            comparator = Comparator.comparing(a -> toDecimal(a.get("sales")));
+            comparator = Comparator.comparing((Map<String, Object> a) -> toDecimal(a.get("sales")));
         } else if ("profit".equals(orderBy)) {
-            comparator = Comparator.comparing(a -> toDecimal(a.get("grossProfit")));
+            comparator = Comparator.comparing((Map<String, Object> a) -> toDecimal(a.get("grossProfit")));
         } else {
-            comparator = Comparator.comparing(a -> toDecimal(a.get("qty")));
+            comparator = Comparator.comparing((Map<String, Object> a) -> toDecimal(a.get("qty")));
         }
+        // 次级排序键：并列时按商品名稳定次序，保证 rank 可复现（null 商品名归一为 "null" 不抛 NPE）
+        comparator = comparator.thenComparing((Map<String, Object> a) -> String.valueOf(a.get("productName")));
         rows.sort(comparator.reversed());
 
         int toIndex = Math.min(limitClipped, rows.size());
