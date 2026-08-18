@@ -28,6 +28,10 @@
           <el-icon><Document /></el-icon>
           <span>订单管理</span>
         </el-menu-item>
+        <el-menu-item v-if="authStore.isBoss" index="/report">
+          <el-icon><TrendCharts /></el-icon>
+          <span>销售报表</span>
+        </el-menu-item>
         <el-menu-item v-if="authStore.isBoss" index="/setting">
           <el-icon><Setting /></el-icon>
           <span>系统设置</span>

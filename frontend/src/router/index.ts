@@ -43,6 +43,12 @@ const routes: RouteRecordRaw[] = [
         name: 'Setting',
         component: () => import('@/views/setting/SettingView.vue'),
         meta: { title: '系统设置', icon: 'Setting', requiresAuth: true, bossOnly: true }
+      },
+      {
+        path: 'report',
+        name: 'Report',
+        component: () => import('@/views/report/ReportView.vue'),
+        meta: { title: '销售报表', icon: 'TrendCharts', requiresAuth: true, bossOnly: true }
       }
     ]
   }
