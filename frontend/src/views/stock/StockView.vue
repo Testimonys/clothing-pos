@@ -425,6 +425,9 @@ onMounted(() => {
 }
 
 .toolbar {
+  /* luohuai codeX  modify: keep toolbar title/actions separated when the available width is small. */
+  flex-wrap: wrap;
+  gap: 12px;
   display: flex;
   align-items: center;
   justify-content: space-between;

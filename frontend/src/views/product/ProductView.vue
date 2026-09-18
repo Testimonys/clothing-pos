@@ -1,13 +1,13 @@
 <template>
   <div class="product-container">
-    <!-- 搜索栏 -->
+    <!-- luohuai codeX  modify: support store article numbers and preview actions; gap spacing keeps wrapped filters separate. -->
     <el-card class="search-card" shadow="never">
       <div class="search-bar">
         <el-input
           v-model="keyword"
-          placeholder="搜索商品名称..."
+          placeholder="搜索名称、货号或条码"
           clearable
-          style="width: 240px"
+          style="width: 240px; max-width: 100%"
           @keyup.enter="handleSearch"
           @clear="handleSearch"
         >
@@ -23,18 +23,19 @@
           placeholder="全部分类"
           clearable
           check-strictly
-          style="width: 180px; margin-left: 12px"
+          style="width: 180px; max-width: 100%"
           @change="handleSearch"
         />
 
-        <el-button type="primary" style="margin-left: 12px" @click="handleSearch">
+        <el-button type="primary" @click="handleSearch">
           <el-icon><Search /></el-icon>
           搜索
         </el-button>
 
-        <el-button style="margin-left: 12px" @click="handleReset">重置</el-button>
+        <el-button @click="handleReset">重置</el-button>
 
-        <el-button type="success" style="margin-left: auto" @click="handleAdd">
+        <el-button @click="importVisible = true">导入预览</el-button>
+        <el-button type="success" @click="handleAdd">
           <el-icon><Plus /></el-icon>
           新增商品
         </el-button>
@@ -50,10 +51,12 @@
         style="width: 100%"
         row-key="id"
       >
-        <el-table-column prop="id" label="ID" width="70" align="center" />
+        <!-- luohuai codeX  modify: show the store identifier without replacing database IDs. -->
+        <el-table-column label="货号" width="115"><template #default="{ row }">{{ row.productCode || '未设置' }}</template></el-table-column>
 
         <el-table-column label="图片" width="90" align="center">
           <template #default="{ row }">
+            <!-- luohuai codeX  modify: teleport the viewer outside table stacking contexts so rows and fixed columns cannot cover it. -->
             <el-image
               v-if="row.imageUrl"
               :src="row.imageUrl"
@@ -61,12 +64,16 @@
               fit="cover"
               :preview-src-list="[row.imageUrl]"
               :initial-index="0"
+              preview-teleported
             />
             <div v-else class="no-image">无图</div>
           </template>
         </el-table-column>
 
         <el-table-column prop="name" label="商品名称" min-width="160" show-overflow-tooltip />
+
+        <!-- luohuai codeX generate: show the selling unit carried by real catalog records. -->
+        <el-table-column prop="unit" label="单位" width="65" />
 
         <el-table-column label="分类" width="110">
           <template #default="{ row }">
@@ -75,34 +82,33 @@
           </template>
         </el-table-column>
 
-        <el-table-column label="进价" width="100" align="right">
+        <!-- luohuai codeX  modify: use consistent money formatting and distinguish catalog margin from sales profit. -->
+        <el-table-column label="成本价" width="100" align="right">
           <template #default="{ row }">
-            <span style="color: #909399">{{ row.costPrice != null ? '¥' + row.costPrice : '-' }}</span>
+            <span style="color: #909399">{{ money(row.costPrice) }}</span>
           </template>
         </el-table-column>
 
         <el-table-column label="售价" width="100" align="right">
           <template #default="{ row }">
             <span style="color: #e6a23c; font-weight: 500">
-              {{ row.sellPrice != null ? '¥' + row.sellPrice : '-' }}
+              {{ money(row.sellPrice) }}
             </span>
           </template>
         </el-table-column>
 
-        <el-table-column label="规格标签" min-width="160">
+        <el-table-column label="标价毛利率" width="110" align="right">
+          <template #default="{ row }">{{ marginRate(row.costPrice, row.sellPrice) }}</template>
+        </el-table-column>
+        <!-- luohuai codeX  modify: make each color/size, barcode and stock quantity visible. -->
+        <el-table-column label="颜色 / 尺码 · 条码 · 库存" min-width="300">
           <template #default="{ row }">
-            <div v-if="row.skus && row.skus.length > 0" class="sku-tags">
-              <el-tag
-                v-for="sku in row.skus"
-                :key="sku.id"
-                size="small"
-                type="info"
-                style="margin: 2px 4px 2px 0"
-              >
-                {{ sku.color || '?' }} / {{ sku.size || '?' }}
-              </el-tag>
+            <div v-for="sku in row.skus || []" :key="sku.id" class="sku-summary">
+              <strong>{{ sku.color || '待补颜色' }} / {{ sku.size || '待补尺码' }}</strong>
+              <span>{{ sku.barcode || '未设置条码' }}</span>
+              <el-tag size="small" type="info">{{ sku.stockQty ?? 0 }} {{ row.unit || '件' }}</el-tag>
             </div>
-            <span v-else style="color: #c0c4cc">无规格</span>
+            <span v-if="!row.skus?.length">暂无规格</span>
           </template>
         </el-table-column>
 
@@ -129,10 +135,10 @@
         </el-table-column>
       </el-table>
 
-      <!-- 分页 -->
+      <!-- luohuai codeX  modify: convert zero-based API paging to the component's one-based page number. -->
       <div class="pagination-wrap" v-if="total > 0">
         <el-pagination
-          v-model:current-page="page"
+          :current-page="page + 1"
           v-model:page-size="size"
           :page-sizes="[10, 20, 50]"
           :total="total"
@@ -144,22 +150,28 @@
       </div>
     </el-card>
 
-    <!-- 新增/编辑弹窗 -->
+    <!-- luohuai codeX  modify: allow room for explicit color/size combinations and catalog fields. -->
     <el-dialog
       v-model="dialogVisible"
       :title="isEdit ? '编辑商品' : '新增商品'"
-      width="780px"
+      width="min(1050px, 96vw)"
       :close-on-click-modal="false"
       destroy-on-close
       @opened="handleDialogOpened"
     >
       <el-form
         ref="formRef"
+        v-loading="detailLoading"
         :model="form"
         :rules="formRules"
         label-width="90px"
         class="product-form"
       >
+        <!-- luohuai codeX generate: article number remains optional for existing products. -->
+        <el-row :gutter="20">
+          <el-col :span="12"><el-form-item label="货号" prop="productCode"><el-input v-model="form.productCode" maxlength="50" placeholder="门店货号，如 10001" /></el-form-item></el-col>
+          <el-col :span="12"><el-form-item label="单位" prop="unit"><el-input v-model="form.unit" maxlength="20" placeholder="件" /></el-form-item></el-col>
+        </el-row>
         <el-row :gutter="20">
           <el-col :span="12">
             <el-form-item label="商品名称" prop="name">
@@ -226,12 +238,20 @@
           <span class="upload-tip">仅支持 jpg/png/gif，建议尺寸 300x300</span>
         </el-form-item>
 
-        <!-- SKU 规格管理 -->
+        <!-- luohuai codeX  modify: explicitly generate color/size combinations without inferring absent source values. -->
         <el-divider content-position="left">
           <span style="font-weight: 500">规格管理 (SKU)</span>
         </el-divider>
 
+        <el-alert title="同一商品按颜色和尺码分别管理。已有规格的库存只读，库存变化请到库存管理操作。" type="info" :closable="false" show-icon />
+        <div class="spec-generator">
+          <el-select v-model="batchColors" multiple filterable allow-create default-first-option placeholder="输入颜色后回车，可多选" style="width: 260px"><el-option v-for="color in batchColors" :key="color" :label="color" :value="color" /></el-select>
+          <el-select v-model="batchSizes" multiple filterable allow-create default-first-option placeholder="选择或输入尺码" style="width: 260px"><el-option v-for="option in sizeOptions" :key="option.id" :label="option.name" :value="option.name" /></el-select>
+          <el-button @click="generateCombinations">生成颜色 × 尺码</el-button>
+          <el-button :loading="generatingBarcodes" @click="fillMissingBarcodes">补全空条码</el-button>
+        </div>
         <div class="sku-section">
+          <div class="sku-column-labels">颜色 / 尺码 / 独立条码 / 库存</div>
           <div
             v-for="(sku, index) in form.skus"
             :key="sku._key"
@@ -243,20 +263,26 @@
               style="width: 120px"
               size="default"
             />
-            <el-input
+            <el-select
               v-model="sku.size"
               placeholder="尺码"
-              style="width: 120px; margin-left: 8px"
+              style="width: 130px; margin-left: 8px"
               size="default"
-            />
+              filterable
+              allow-create
+              default-first-option
+              clearable
+            >
+              <el-option v-for="s in sizeOptions" :key="s.id" :label="s.name" :value="s.name" />
+            </el-select>
             <el-input
               v-model="sku.barcode"
               placeholder="条码"
-              style="width: 150px; margin-left: 8px"
+              style="width: 240px; margin-left: 8px"
               size="default"
               :disabled="sku._generatingBarcode"
             >
-              <template #append v-if="isEdit && sku.id">
+              <template #append>
                 <el-button
                   :loading="sku._generatingBarcode"
                   @click="handleGenerateBarcode(sku)"
@@ -269,7 +295,9 @@
             <el-input-number
               v-model="sku.stockQty"
               :min="0"
-              placeholder="初始库存"
+              :disabled="!sku._isNew"
+              :title="sku._isNew ? '初始库存' : '现有库存只读，请在库存管理操作'"
+              placeholder="库存"
               style="width: 120px; margin-left: 8px"
               size="default"
               controls-position="right"
@@ -293,9 +321,11 @@
 
       <template #footer>
         <el-button @click="dialogVisible = false">取消</el-button>
-        <el-button type="primary" :loading="saving" @click="handleSave">保存</el-button>
+        <el-button type="primary" :loading="saving" :disabled="detailLoading || generatingBarcodes || form.skus.some(s => s._generatingBarcode)" @click="handleSave">保存</el-button>
       </template>
     </el-dialog>
+    <!-- luohuai codeX generate: separate preview flow never writes product or stock data. -->
+    <ProductImportPreview v-model="importVisible" />
   </div>
 </template>
 
@@ -304,16 +334,16 @@ import { ref, reactive, onMounted, computed, nextTick } from 'vue'
 import { ElMessage } from 'element-plus'
 import { Plus, Search, Edit, Delete, Refresh } from '@element-plus/icons-vue'
 import { useAuthStore } from '@/stores/auth'
+// luohuai codeX  modify: connect the preview dialog and atomic catalog API.
+import ProductImportPreview from '@/components/ProductImportPreview.vue'
+import { listSizes, type SizeConfigDTO } from '@/api/size'
 import {
   listProducts,
   getProduct,
   createProduct,
-  updateProduct,
+  updateProductCatalog,
   deleteProduct as deleteProductApi,
-  addSku as addSkuApi,
-  updateSku as updateSkuApi,
-  deleteSku as deleteSkuApi,
-  generateBarcode,
+  generateNextBarcode,
   listCategories,
   type ProductDTO,
   type ProductSkuDTO,
@@ -400,7 +430,14 @@ const loading = ref(false)
 const dialogVisible = ref(false)
 const isEdit = ref(false)
 const editId = ref<number | null>(null)
+// luohuai codeX  modify: the backend derives deleted SKUs within one catalog transaction.
+const importVisible = ref(false)
+const batchColors = ref<string[]>([])
+const batchSizes = ref<string[]>([])
+const generatingBarcodes = ref(false)
 const saving = ref(false)
+// luohuai codeX generate: a failed detail request must never leave an old product form saveable under a new ID.
+const detailLoading = ref(false)
 const formRef = ref<FormInstance>()
 
 // SKU 扩展类型（前端用）
@@ -423,6 +460,9 @@ function createEmptySku(): SkuFormItem {
 }
 
 interface ProductForm {
+  // luohuai codeX  modify: retain textual article numbers and the selling unit in the complete form lifecycle.
+  productCode: string
+  unit: string
   name: string
   categoryId: number | null
   costPrice?: number
@@ -432,6 +472,9 @@ interface ProductForm {
 }
 
 const form = reactive<ProductForm>({
+  // luohuai codeX  modify: compatible defaults for legacy products without article numbers.
+  productCode: '',
+  unit: '件',
   name: '',
   categoryId: null,
   costPrice: undefined,
@@ -479,8 +522,14 @@ function handleImageSuccess(response: { url?: string }) {
   }
 }
 
-function handleImageError() {
-  ElMessage.error('图片上传失败，请重试')
+// luohuai codeX  modify: show controlled COS configuration/upload errors instead of a generic retry message.
+function handleImageError(error: Error) {
+  let message = '图片上传失败，请重试'
+  try {
+    const response = JSON.parse(error.message)
+    if (typeof response.message === 'string') message = response.message
+  } catch { /* Non-JSON transport failures use the fallback message. */ }
+  ElMessage.error(message)
 }
 
 function handleImageRemove() {
@@ -489,8 +538,20 @@ function handleImageRemove() {
 }
 
 // ---- 规格行操作 ----
-function addSkuRow() {
-  form.skus.push(createEmptySku())
+async function addSkuRow() {
+  // luohuai codeX  modify: bind the returned barcode to its own row, even when multiple rows are added quickly.
+  const added = createEmptySku()
+  form.skus.push(added)
+  // 自动生成条码（失败则留空，可手动输入或点生成按钮）
+  try {
+    const result = await generateNextBarcode()
+    const current = form.skus.find(s => s._key === added._key)
+    if (current && !current.barcode) {
+      current.barcode = result.barcode
+    }
+  } catch {
+    // 忽略，用户可手动输入
+  }
 }
 
 function removeSkuRow(index: number) {
@@ -540,8 +601,14 @@ async function loadProducts() {
 }
 
 async function loadProductDetail(id: number) {
+  // luohuai codeX  modify: guard asynchronous edits so stale detail responses cannot populate another product.
+  detailLoading.value = true
   try {
     const detail = await getProduct(id)
+    if (editId.value !== id || !dialogVisible.value) return
+    // luohuai codeX  modify: populate newly supported business identifiers without changing existing SKU IDs.
+    form.productCode = detail.productCode || ''
+    form.unit = detail.unit || '件'
     form.name = detail.name || ''
     form.categoryId = detail.categoryId ?? null
     form.costPrice = detail.costPrice
@@ -569,8 +636,13 @@ async function loadProductDetail(id: number) {
     } else {
       form.skus = [createEmptySku()]
     }
+
+    // luohuai codeX  modify: removed specifications are determined server-side from the submitted complete list.
   } catch {
     ElMessage.error('加载商品详情失败')
+    if (editId.value === id) dialogVisible.value = false
+  } finally {
+    if (editId.value === id) detailLoading.value = false
   }
 }
 
@@ -600,6 +672,12 @@ function handleSizeChange(s: number) {
 
 // ---- 新增 / 编辑 ----
 function handleAdd() {
+  // luohuai codeX  modify: clear catalog metadata and batch selectors before starting another product.
+  form.productCode = ''
+  form.unit = '件'
+  batchColors.value = []
+  batchSizes.value = []
+  detailLoading.value = false
   isEdit.value = false
   editId.value = null
   form.name = ''
@@ -614,6 +692,10 @@ function handleAdd() {
 }
 
 function handleEdit(row: ProductDTO) {
+  // luohuai codeX  modify: do not carry one product's batch selections into another.
+  batchColors.value = []
+  batchSizes.value = []
+  detailLoading.value = true
   isEdit.value = true
   editId.value = row.id!
   dialogVisible.value = true
@@ -635,17 +717,18 @@ async function handleDelete(row: ProductDTO) {
     await deleteProductApi(row.id!)
     ElMessage.success('删除成功')
     loadProducts()
-  } catch {
-    ElMessage.error('删除失败')
+  } catch (error: any) {
+    // luohuai codeX  modify: explain why a product with stock/history cannot be deleted.
+    ElMessage.error(error?.response?.data?.message || '删除失败')
   }
 }
 
 // ---- 生成条码 ----
 async function handleGenerateBarcode(sku: SkuFormItem) {
-  if (!editId.value || !sku.id) return
   sku._generatingBarcode = true
   try {
-    const result = await generateBarcode(editId.value, sku.id)
+    // luohuai codeX  modify: stage barcode changes so cancelling the form does not change a stored barcode.
+    const result = await generateNextBarcode()
     sku.barcode = result.barcode
     ElMessage.success('条码生成成功')
   } catch {
@@ -657,12 +740,14 @@ async function handleGenerateBarcode(sku: SkuFormItem) {
 
 // ---- 保存 ----
 async function handleSave() {
+  // luohuai codeX  modify: prevent overlapping writes or saving before details and generated barcodes are ready.
+  if (saving.value || detailLoading.value || generatingBarcodes.value || form.skus.some(s => s._generatingBarcode)) return
   const valid = await formRef.value?.validate().catch(() => false)
   if (!valid) return
 
-  // 过滤掉空的 SKU 行
+  // luohuai codeX  modify: validate variants then submit one transaction; never send back existing inventory.
   const validSkus: SkuFormItem[] = form.skus.filter(
-    (s) => s.color || s.size || s.barcode
+    (s) => !s._isNew || s.color?.trim() || s.size?.trim() || s.barcode?.trim()
   )
 
   if (validSkus.length === 0) {
@@ -670,81 +755,35 @@ async function handleSave() {
     return
   }
 
+  if (validSkus.some(s => s._isNew && (!s.color?.trim() || !s.size?.trim() || s.color === '0无' || s.size === '0均码'))) {
+    ElMessage.warning('新规格必须填写真实颜色和尺码')
+    return
+  }
+  // luohuai codeX  modify: ensure new variants have independent barcodes before submitting.
+  if (validSkus.some(s => s._isNew && !s.barcode?.trim())) { ElMessage.warning('新规格请填写条码，或点击补全空条码'); return }
+  const specKeys = validSkus.map(s => `${s.color?.trim().toLowerCase() || ''}\u0000${s.size?.trim().toLowerCase() || ''}`)
+  if (new Set(specKeys).size !== specKeys.length) { ElMessage.warning('颜色和尺码组合重复'); return }
+  const barcodes = validSkus.map(s => s.barcode?.trim().toLowerCase()).filter(Boolean)
+  if (new Set(barcodes).size !== barcodes.length) { ElMessage.warning('不同规格不能共用条码'); return }
+  const payload: ProductDTO = {
+    productCode: form.productCode.trim() || null,
+    unit: form.unit.trim() || '件',
+    name: form.name.trim(), categoryId: form.categoryId ?? null,
+    costPrice: form.costPrice, sellPrice: form.sellPrice, imageUrl: form.imageUrl || undefined,
+    skus: validSkus.map(s => ({
+      id: s._isNew ? undefined : s.id,
+      color: s.color?.trim() || '', size: s.size?.trim() || '', barcode: s.barcode?.trim() || '',
+      ...(s._isNew ? { stockQty: s.stockQty ?? 0 } : {})
+    }))
+  }
+
   saving.value = true
   try {
     if (isEdit.value && editId.value != null) {
-      // ---- 编辑模式 ----
-      // 1. 更新商品基本信息
-      await updateProduct(editId.value, {
-        name: form.name,
-        categoryId: form.categoryId ?? null,
-        costPrice: form.costPrice,
-        sellPrice: form.sellPrice,
-        imageUrl: form.imageUrl || undefined
-      })
-
-      // 2. 处理 SKU
-      for (const sku of validSkus) {
-        if (sku._isNew) {
-          // 新增 SKU
-          await addSkuApi(editId.value, {
-            color: sku.color || undefined,
-            size: sku.size || undefined,
-            barcode: sku.barcode || undefined,
-            stockQty: sku.stockQty ?? 0
-          })
-        } else if (sku.id) {
-          // 更新已有 SKU
-          await updateSkuApi(editId.value, sku.id, {
-            color: sku.color || undefined,
-            size: sku.size || undefined,
-            barcode: sku.barcode || undefined,
-            stockQty: sku.stockQty ?? 0
-          })
-        }
-      }
-
-      // 3. 删除被移除的已有 SKU
-      const keptSkus = validSkus.filter((s) => !s._isNew)
-      const keptIds = new Set(keptSkus.map((s) => s.id).filter(Boolean))
-
-      // 从后端加载的原始 skus 与当前对比
-      if (editId.value) {
-        try {
-          const freshDetail = await getProduct(editId.value)
-          if (freshDetail.skus) {
-            for (const originalSku of freshDetail.skus) {
-              if (originalSku.id && !keptIds.has(originalSku.id) && keptSkus.length > 0) {
-                // 这个原始 SKU 被删除了
-                try {
-                  await deleteSkuApi(editId.value, originalSku.id)
-                } catch {
-                  // 删除失败不阻塞
-                }
-              }
-            }
-          }
-        } catch {
-          // 重新加载失败不阻塞
-        }
-      }
-
-      ElMessage.success('商品更新成功')
+      await updateProductCatalog(editId.value, payload)
+      ElMessage.success('商品及规格已保存')
     } else {
-      // ---- 新增模式 ----
-      await createProduct({
-        name: form.name,
-        categoryId: form.categoryId ?? null,
-        costPrice: form.costPrice,
-        sellPrice: form.sellPrice,
-        imageUrl: form.imageUrl || undefined,
-        skus: validSkus.map((sku) => ({
-          color: sku.color || undefined,
-          size: sku.size || undefined,
-          barcode: sku.barcode || undefined,
-          stockQty: sku.stockQty ?? 0
-        }))
-      })
+      await createProduct(payload)
       ElMessage.success('商品创建成功')
     }
 
@@ -758,14 +797,70 @@ async function handleSave() {
   }
 }
 
+// luohuai codeX generate: derive catalog margin without storing duplicate financial fields.
+const money = (value?: number) => value == null ? '—' : `¥${value.toFixed(2)}`
+function marginRate(cost?: number, sell?: number) {
+  return cost == null || sell == null || sell <= 0 ? '—' : `${((sell - cost) / sell * 100).toFixed(2)}%`
+}
+
+// luohuai codeX generate: add distinct combinations and retain existing IDs, barcodes and stock.
+function generateCombinations() {
+  const colors = [...new Set(batchColors.value.map(s => s.trim()).filter(Boolean))]
+  const sizes = [...new Set(batchSizes.value.map(s => s.trim()).filter(Boolean))]
+  if (!colors.length || !sizes.length) { ElMessage.warning('请先输入颜色并选择尺码'); return }
+  if (colors.length * sizes.length + form.skus.length > 500) { ElMessage.warning('单个商品最多500个规格'); return }
+  const existing = new Set(form.skus.map(s => `${s.color?.trim().toLowerCase()}\u0000${s.size?.trim().toLowerCase()}`))
+  const additions: SkuFormItem[] = []
+  for (const color of colors) for (const size of sizes) {
+    const key = `${color.toLowerCase()}\u0000${size.toLowerCase()}`
+    if (!existing.has(key)) {
+      additions.push({ ...createEmptySku(), color, size })
+      existing.add(key)
+    }
+  }
+  form.skus = form.skus.filter(s => !s._isNew || s.color || s.size || s.barcode).concat(additions)
+  ElMessage.success(`已增加 ${additions.length} 个规格，请填写原条码或点击补全空条码`)
+}
+
+// luohuai codeX generate: reserve barcodes only for empty rows; existing store barcodes remain untouched.
+async function fillMissingBarcodes() {
+  if (generatingBarcodes.value) return
+  generatingBarcodes.value = true
+  try {
+    for (const sku of form.skus.filter(s => !s.barcode?.trim())) {
+      const { barcode } = await generateNextBarcode()
+      if (!sku.barcode?.trim()) sku.barcode = barcode
+    }
+    ElMessage.success('空条码已补全，保存商品后生效')
+  } catch { ElMessage.error('部分条码未能生成，请重试补全') }
+  finally { generatingBarcodes.value = false }
+}
+
 // ---- 初始化 ----
+// ---- 尺码标签（下拉选择，来源系统设置→标签管理） ----
+const sizeOptions = ref<SizeConfigDTO[]>([])
+
+async function loadSizeOptions() {
+  try {
+    sizeOptions.value = await listSizes()
+  } catch {
+    // 加载失败不阻塞，尺码仍可手动输入
+  }
+}
+
 onMounted(() => {
+  loadSizeOptions()
   loadCategories()
   loadProducts()
 })
 </script>
 
 <style scoped>
+/* luohuai codeX generate: keep batch selectors and specification details readable. */
+.spec-generator { display: flex; flex-wrap: wrap; gap: 10px; margin: 16px 0; }
+.sku-summary { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; margin: 5px 0; }
+.sku-summary span { font-size: 12px; color: #606266; }
+.sku-column-labels { color: #909399; margin-bottom: 8px; }
 .product-container {
   padding: 20px;
 }
@@ -775,10 +870,15 @@ onMounted(() => {
 }
 
 .search-bar {
+  /* luohuai codeX  modify: avoid touching rows when search fields and action buttons wrap. */
   display: flex;
   align-items: center;
   flex-wrap: wrap;
+  gap: 12px;
 }
+
+/* luohuai codeX generate: flex gap replaces Element Plus sibling margins after a line break. */
+.search-bar .el-button { margin-left: 0; }
 
 .search-bar .el-input,
 .search-bar .el-select {
@@ -815,9 +915,10 @@ onMounted(() => {
 }
 
 .product-form {
+  /* luohuai codeX  modify: absorb form-row gutters so the inner form does not gain an unnecessary horizontal scrollbar. */
   max-height: 60vh;
   overflow-y: auto;
-  padding-right: 8px;
+  padding: 0 10px;
 }
 
 .sku-section {
@@ -827,6 +928,8 @@ onMounted(() => {
 .sku-row {
   display: flex;
   align-items: center;
+  flex-wrap: wrap;
+  gap: 8px 0;
   margin-bottom: 12px;
 }
 

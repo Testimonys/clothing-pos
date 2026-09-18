@@ -1,8 +1,8 @@
 package com.huaxing.config;
 
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
-import org.springframework.core.env.Environment;
 import org.springframework.web.cors.CorsConfiguration;
 import org.springframework.web.cors.UrlBasedCorsConfigurationSource;
 import org.springframework.web.filter.CorsFilter;
@@ -13,22 +13,17 @@ import java.util.List;
 @Configuration
 public class CorsConfig {
 
-    private final Environment environment;
-
-    public CorsConfig(Environment environment) {
-        this.environment = environment;
-    }
+    /**
+     * 允许的跨域来源（逗号分隔，支持通配符 pattern）。
+     * 默认含本地开发地址 + 生产域名 https://luohuai2026.cn，可在配置中覆盖。
+     */
+    @Value("${app.cors.allowed-origins}")
+    private String allowedOrigins;
 
     @Bean
     public CorsFilter corsFilter() {
         CorsConfiguration config = new CorsConfiguration();
-        List<String> allowedOrigins;
-        if (Arrays.asList(environment.getActiveProfiles()).contains("h2")) {
-            allowedOrigins = List.of("*");
-        } else {
-            allowedOrigins = List.of("http://localhost:*", "http://127.0.0.1:*", "http://192.168.*.*:*");
-        }
-        config.setAllowedOriginPatterns(allowedOrigins);
+        config.setAllowedOriginPatterns(Arrays.asList(allowedOrigins.split(",")));
         config.setAllowedMethods(List.of("GET", "POST", "PUT", "DELETE", "OPTIONS", "PATCH"));
         config.setAllowedHeaders(List.of("*"));
         config.setAllowCredentials(true);

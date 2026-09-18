@@ -1,6 +1,6 @@
 <template>
   <div class="order-container">
-    <!-- 搜索栏 -->
+    <!-- luohuai codeX  modify: space filters with wrapping gaps rather than margins that indent the next line. -->
     <el-card class="search-card" shadow="never">
       <div class="search-bar">
         <el-date-picker
@@ -11,7 +11,7 @@
           end-placeholder="结束时间"
           format="YYYY-MM-DD HH:mm:ss"
           value-format="YYYY-MM-DDTHH:mm:ss"
-          style="width: 380px"
+          class="order-date-range"
           clearable
         />
 
@@ -19,19 +19,19 @@
           v-model="payMethod"
           placeholder="支付方式"
           clearable
-          style="width: 150px; margin-left: 12px"
+          style="width: 150px; max-width: 100%"
         >
           <el-option label="现金" value="CASH" />
           <el-option label="微信支付" value="WECHAT" />
           <el-option label="支付宝" value="ALIPAY" />
         </el-select>
 
-        <el-button type="primary" style="margin-left: 12px" @click="handleSearch">
+        <el-button type="primary" @click="handleSearch">
           <el-icon><Search /></el-icon>
           搜索
         </el-button>
 
-        <el-button style="margin-left: 12px" @click="handleReset">重置</el-button>
+        <el-button @click="handleReset">重置</el-button>
       </div>
     </el-card>
 
@@ -389,10 +389,16 @@ onMounted(() => {
 }
 
 .search-bar {
+  /* luohuai codeX  modify: vertical gaps prevent wrapped filters from touching. */
   display: flex;
   align-items: center;
   flex-wrap: wrap;
+  gap: 12px;
 }
+
+/* luohuai codeX generate: stop date range inputs stretching the filter bar or crowding nearby buttons. */
+.search-bar :deep(.order-date-range) { flex: 0 1 380px; width: 380px; min-width: 0; max-width: 100%; }
+.search-bar .el-button { margin-left: 0; }
 
 .table-card {
   min-height: 400px;

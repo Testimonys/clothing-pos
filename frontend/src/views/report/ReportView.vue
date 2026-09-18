@@ -11,7 +11,7 @@
           end-placeholder="结束日期"
           value-format="YYYY-MM-DD"
           :shortcuts="shortcuts"
-          style="width: 320px"
+          class="report-date-range"
         />
         <el-radio-group
           v-model="granularity"
@@ -30,7 +30,8 @@
 
     <!-- 统计卡片 -->
     <el-row :gutter="16" class="stat-row">
-      <el-col :span="4" v-for="card in statCards" :key="card.label">
+      <!-- luohuai codeX  modify: reflow summary cards before their amounts become cramped. -->
+      <el-col :xs="12" :sm="8" :lg="4" v-for="card in statCards" :key="card.label">
         <el-card shadow="never" class="stat-card">
           <el-statistic
             :title="card.label"
@@ -45,7 +46,8 @@
 
     <!-- 图表区 -->
     <el-row :gutter="16" class="chart-row">
-      <el-col :span="12">
+      <!-- luohuai codeX  modify: give charts a full row on smaller screens so labels remain legible. -->
+      <el-col :xs="24" :lg="12">
         <el-card shadow="never">
           <template #header>销售趋势</template>
           <div class="chart-container" v-loading="loading">
@@ -54,7 +56,7 @@
           </div>
         </el-card>
       </el-col>
-      <el-col :span="12">
+      <el-col :xs="24" :lg="12">
         <el-card shadow="never">
           <template #header>分类占比</template>
           <div class="chart-container" v-loading="loading">
@@ -227,14 +229,19 @@ function renderTrendChart() {
     {
       tooltip: {
         trigger: 'axis',
+        // luohuai codeX  modify: keep long tooltips inside the chart card.
+        confine: true,
         valueFormatter: (value: unknown) => fmtMoney(Number(value))
       },
-      legend: { data: ['销售额', '毛利'] },
-      grid: { left: 16, right: 16, top: 40, bottom: 16, containLabel: true },
+      // luohuai codeX  modify: ECharts 6 defaults legends to the bottom; reserve a separate top band instead of overlapping dates.
+      legend: { data: ['销售额', '毛利'], top: 0, bottom: 'auto', left: 'center' },
+      grid: { left: 12, right: 20, top: 48, bottom: 24, containLabel: true },
       xAxis: {
         type: 'category',
         boundaryGap: false,
-        data: trend.map((t) => t.key ?? '')
+        data: trend.map((t) => t.key ?? ''),
+        // luohuai codeX generate: abbreviate daily ticks while retaining the complete date in the axis tooltip.
+        axisLabel: { hideOverlap: true, margin: 12, formatter: (value: string) => /^\d{4}-\d{2}-\d{2}$/.test(value) ? value.slice(5) : value }
       },
       yAxis: { type: 'value' },
       series: [
@@ -266,14 +273,22 @@ function renderCategoryChart() {
     {
       tooltip: {
         trigger: 'item',
+        // luohuai codeX  modify: avoid overflowing the card when category names are long.
+        confine: true,
         formatter: (params: { name?: string; value?: unknown; percent?: number }) =>
           `${params.name ?? '-'}<br/>销售额：${fmtMoney(Number(params.value))}<br/>占比：${params.percent ?? 0}%`
       },
-      legend: { bottom: 0 },
+      // luohuai codeX  modify: paginate long category legends in a dedicated band instead of wrapping them over the pie labels.
+      legend: { type: 'scroll', top: 0, bottom: 'auto', left: 8, right: 8, textStyle: { width: 110, overflow: 'truncate' }, tooltip: { show: true } },
       series: [
         {
           type: 'pie',
+          // luohuai codeX generate: reserve legend space and suppress colliding outside labels for many categories.
+          top: 48,
+          bottom: 8,
           radius: '65%',
+          label: { width: 90, overflow: 'truncate', alignTo: 'edge', edgeDistance: 8 },
+          labelLayout: { hideOverlap: true },
           data: categoryData.value.map((c) => ({
             name: c.categoryName ?? '未分类',
             value: c.sales ?? 0
@@ -364,17 +379,24 @@ onBeforeUnmount(() => {
 }
 
 .filter-bar {
+  /* luohuai codeX  modify: use two-axis gaps so wrapped filters do not touch or push controls outside the card. */
   display: flex;
   align-items: center;
   flex-wrap: wrap;
+  gap: 12px;
 }
 
-.granularity-group {
-  margin-left: 16px;
+/* luohuai codeX generate: date editors grow by default in Element Plus; constrain their flex basis explicitly. */
+.filter-bar :deep(.report-date-range) {
+  flex: 0 1 320px;
+  width: 320px;
+  min-width: 0;
+  max-width: 100%;
 }
 
 .filter-bar .el-button {
-  margin-left: 16px;
+  /* luohuai codeX  modify: gap handles spacing consistently after wrapping. */
+  margin-left: 0;
 }
 
 .stat-row {
@@ -385,7 +407,12 @@ onBeforeUnmount(() => {
   margin-bottom: 16px;
 }
 
+/* luohuai codeX generate: large amounts wrap within their own card instead of painting over the adjacent card. */
+.stat-card :deep(.el-statistic__content) { overflow-wrap: anywhere; }
+
 .chart-row {
+  /* luohuai codeX  modify: keep vertical separation when charts stack at narrower widths. */
+  row-gap: 16px;
   margin-bottom: 16px;
 }
 

@@ -9,6 +9,9 @@
 ### 快速开始（一键构建 + 启动）
 
 ```bash
+# luohuai codeX generate: create local environment configuration and fill in COS placeholders before startup.
+cp .env.example .env
+
 # 一行命令：构建前端 + 构建后端 + 启动全部服务
 docker compose up -d --build
 
@@ -55,7 +58,8 @@ docker compose restart backend       # 重启后端
 | 数据 | 存储位置 | 持久化方式 |
 |------|---------|-----------|
 | MySQL 数据库 | `mysql-data` volume | Docker volume |
-| 上传图片 | `uploads` volume | Docker volume |
+| 新上传图片/文件 | 腾讯云 COS | COS 存储桶 |
+| 历史本地图片 | `uploads` volume | Docker volume（仅兼容旧 URL） |
 | 备份文件 | `backup` volume | Docker volume |
 
 ### 构建说明
@@ -71,6 +75,23 @@ docker compose restart backend       # 重启后端
 - JDK 17+
 - MySQL 8.0
 - Node.js 18+（构建前端）
+- 腾讯云 COS 存储桶，以及仅具备所需权限的服务端密钥
+
+### 腾讯云 COS 配置
+
+本地启动前可在 `application.yml` 中替换占位符，也可以设置以下环境变量：
+
+```bash
+# luohuai codeX generate: inject COS configuration into the backend process.
+export COS_SECRET_ID=YOUR_SECRET_ID
+export COS_SECRET_KEY=YOUR_SECRET_KEY
+export COS_BUCKET_NAME=YOUR_BUCKET_NAME-APPID
+export COS_REGION=ap-shanghai
+export COS_PUBLIC_URL=
+export COS_KEY_PREFIX=clothing-pos
+```
+
+`COS_PUBLIC_URL` 留空时使用存储桶默认 HTTPS 域名；若使用 CDN 或自定义域名，填写其完整 HTTPS 地址。商品图片需要浏览器能够读取返回的 URL，因此存储桶须配置相应的公开读取或 CDN 访问策略。服务端密钥至少需要目标前缀的 `cos:PutObject` 权限，不要把 SecretKey 放在前端代码或数据库中。
 
 ### 步骤
 
@@ -93,6 +114,17 @@ java -jar target/clothing-pos-1.0.0.jar
 - 无 nginx（开发模式）：后端 `http://localhost:8080`，前端 `cd frontend && npm run dev` → `http://localhost:5173`
 
 ---
+
+## 2026-09-16 商品管理版本升级
+
+已有数据库需要在启动新版后端前，执行 `scripts/migrations/2026-09-16-product-catalog.sql`，增量加入货号、单位与货号唯一索引。先按备份流程保存现有数据，并确认选中的业务库；仅替换 `schema.sql` 不会升级已有表。
+
+```bash
+# luohuai codeX generate: apply the additive catalog migration to the selected existing database.
+mysql -u YOUR_DB_USER -p clothing_pos < scripts/migrations/2026-09-16-product-catalog.sql
+```
+
+新库仍按原初始化流程创建。商品导入当前仅支持预览，不会自动导入 Excel 中的商品或库存；详见 [实现与验收说明](docs/2026-09-16-product-catalog-implementation.md)。
 
 ## 扫码枪
 

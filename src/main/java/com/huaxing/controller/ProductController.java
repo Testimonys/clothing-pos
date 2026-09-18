@@ -12,6 +12,7 @@ import com.huaxing.entity.ProductSku;
 import com.huaxing.mapper.CategoryMapper;
 import com.huaxing.mapper.ProductMapper;
 import com.huaxing.mapper.ProductSkuMapper;
+import com.huaxing.service.ProductCatalogService;
 import org.springframework.http.ResponseEntity;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.bind.annotation.*;
@@ -19,6 +20,7 @@ import org.springframework.web.bind.annotation.*;
 import java.time.LocalDate;
 import java.time.format.DateTimeFormatter;
 import java.util.*;
+import java.util.concurrent.ConcurrentHashMap;
 import java.util.stream.Collectors;
 
 @RestController
@@ -28,13 +30,19 @@ public class ProductController {
     private final ProductMapper productMapper;
     private final ProductSkuMapper productSkuMapper;
     private final CategoryMapper categoryMapper;
+    // luohuai codeX  modify: share validation and atomic catalog writes across existing endpoints.
+    private final ProductCatalogService catalogService;
+
+    /** 当日条码序号缓存：新增 SKU 时连续生成，避免未保存前序号重复 */
+    private final Map<String, Integer> barcodeSeqCache = new ConcurrentHashMap<>();
 
     public ProductController(ProductMapper productMapper,
                              ProductSkuMapper productSkuMapper,
-                             CategoryMapper categoryMapper) {
+                             CategoryMapper categoryMapper, ProductCatalogService catalogService) {
         this.productMapper = productMapper;
         this.productSkuMapper = productSkuMapper;
         this.categoryMapper = categoryMapper;
+        this.catalogService = catalogService;
     }
 
     /**
@@ -48,13 +56,16 @@ public class ProductController {
             @RequestParam(defaultValue = "0") int page,
             @RequestParam(defaultValue = "20") int size) {
         LambdaQueryWrapper<Product> wrapper = new LambdaQueryWrapper<>();
-        if (keyword != null && !keyword.isEmpty()) {
-            wrapper.like(Product::getName, keyword);
+        // luohuai codeX  modify: match name, article number or barcode without duplicating paged products.
+        if (keyword != null && !keyword.trim().isEmpty()) {
+            String term = keyword.trim();
+            wrapper.and(w -> w.like(Product::getName, term).or().like(Product::getProductCode, term)
+                    .or().apply("EXISTS (SELECT 1 FROM product_sku search_sku WHERE search_sku.product_id = product.id AND search_sku.barcode LIKE {0})", "%" + term + "%"));
         }
         if (categoryId != null) {
             wrapper.eq(Product::getCategoryId, categoryId);
         }
-        wrapper.orderByDesc(Product::getCreateTime);
+        wrapper.orderByDesc(Product::getCreateTime).orderByDesc(Product::getId);
 
         Page<Product> mpPage = new Page<>(page + 1, size);
         IPage<Product> productPage = productMapper.selectPage(mpPage, wrapper);
@@ -110,29 +121,8 @@ public class ProductController {
     @PostMapping
     @Transactional
     public ResponseEntity<?> create(@RequestBody ProductDTO dto) {
-        Product product = new Product();
-        product.setName(dto.getName());
-        product.setImageUrl(dto.getImageUrl());
-        product.setCostPrice(dto.getCostPrice());
-        product.setSellPrice(dto.getSellPrice());
-        product.setCategoryId(dto.getCategoryId());
-        productMapper.insert(product);
-
-        List<ProductSku> savedSkus = new ArrayList<>();
-        if (dto.getSkus() != null) {
-            for (ProductSkuDTO skuDTO : dto.getSkus()) {
-                ProductSku sku = new ProductSku();
-                sku.setProductId(product.getId());
-                sku.setColor(skuDTO.getColor());
-                sku.setSize(skuDTO.getSize());
-                sku.setBarcode(skuDTO.getBarcode());
-                sku.setStockQty(skuDTO.getStockQty() != null ? skuDTO.getStockQty() : 0);
-                productSkuMapper.insert(sku);
-                savedSkus.add(sku);
-            }
-        }
-        product.setSkus(savedSkus);
-        return ResponseEntity.ok(toDetailDTO(product));
+        // luohuai codeX  modify: validate all color/size combinations before creating the product.
+        return ResponseEntity.ok(toDetailDTO(catalogService.create(dto)));
     }
 
     /**
@@ -142,17 +132,14 @@ public class ProductController {
     @PutMapping("/{id}")
     @Transactional
     public ResponseEntity<?> update(@PathVariable Long id, @RequestBody ProductDTO dto) {
-        Product product = productMapper.selectById(id);
-        if (product == null) {
-            return ResponseEntity.notFound().build();
-        }
-        product.setName(dto.getName());
-        product.setImageUrl(dto.getImageUrl());
-        product.setCostPrice(dto.getCostPrice());
-        product.setSellPrice(dto.getSellPrice());
-        product.setCategoryId(dto.getCategoryId());
-        productMapper.updateById(product);
-        return ResponseEntity.ok(toDTO(product));
+        // luohuai codeX  modify: validate article numbers and prices while preserving the original metadata endpoint.
+        return ResponseEntity.ok(toDTO(catalogService.update(id, dto, false)));
+    }
+
+    /** luohuai codeX generate: save the complete product and SKU form atomically, without overwriting existing stock. */
+    @PutMapping("/{id}/catalog")
+    public ResponseEntity<?> updateCatalog(@PathVariable Long id, @RequestBody ProductDTO dto) {
+        return ResponseEntity.ok(toDetailDTO(catalogService.update(id, dto, true)));
     }
 
     /**
@@ -162,13 +149,8 @@ public class ProductController {
     @DeleteMapping("/{id}")
     @Transactional
     public ResponseEntity<?> delete(@PathVariable Long id) {
-        if (productMapper.selectById(id) == null) {
-            return ResponseEntity.notFound().build();
-        }
-        // 先删除关联的SKU
-        productSkuMapper.delete(new LambdaQueryWrapper<ProductSku>().eq(ProductSku::getProductId, id));
-        // 再删除商品
-        productMapper.deleteById(id);
+        // luohuai codeX  modify: deleting a product must not bypass the SKU stock/history protections.
+        catalogService.deleteProduct(id);
         return ResponseEntity.ok(Map.of("message", "ok"));
     }
 
@@ -207,18 +189,8 @@ public class ProductController {
     @PostMapping("/{productId}/sku")
     @Transactional
     public ResponseEntity<?> addSku(@PathVariable Long productId, @RequestBody ProductSkuDTO dto) {
-        Product product = productMapper.selectById(productId);
-        if (product == null) {
-            return ResponseEntity.notFound().build();
-        }
-        ProductSku sku = new ProductSku();
-        sku.setProductId(productId);
-        sku.setColor(dto.getColor());
-        sku.setSize(dto.getSize());
-        sku.setBarcode(dto.getBarcode());
-        sku.setStockQty(dto.getStockQty() != null ? dto.getStockQty() : 0);
-        productSkuMapper.insert(sku);
-        return ResponseEntity.ok(toSkuDTO(sku));
+        // luohuai codeX  modify: reject missing or duplicate color/size combinations.
+        return ResponseEntity.ok(toSkuDTO(catalogService.addSku(productId, dto)));
     }
 
     /**
@@ -230,16 +202,8 @@ public class ProductController {
     public ResponseEntity<?> updateSku(@PathVariable Long productId,
                                         @PathVariable Long skuId,
                                         @RequestBody ProductSkuDTO dto) {
-        ProductSku sku = productSkuMapper.selectById(skuId);
-        if (sku == null || !productId.equals(sku.getProductId())) {
-            return ResponseEntity.notFound().build();
-        }
-        sku.setColor(dto.getColor());
-        sku.setSize(dto.getSize());
-        sku.setBarcode(dto.getBarcode());
-        sku.setStockQty(dto.getStockQty());
-        productSkuMapper.updateById(sku);
-        return ResponseEntity.ok(toSkuDTO(sku));
+        // luohuai codeX  modify: update only SKU metadata, never the stale stock value from an editing form.
+        return ResponseEntity.ok(toSkuDTO(catalogService.updateSku(productId, skuId, dto)));
     }
 
     /**
@@ -249,11 +213,8 @@ public class ProductController {
     @DeleteMapping("/{productId}/sku/{skuId}")
     @Transactional
     public ResponseEntity<?> deleteSku(@PathVariable Long productId, @PathVariable Long skuId) {
-        ProductSku sku = productSkuMapper.selectById(skuId);
-        if (sku == null || !productId.equals(sku.getProductId())) {
-            return ResponseEntity.notFound().build();
-        }
-        productSkuMapper.deleteById(skuId);
+        // luohuai codeX  modify: standalone deletions obey the same catalog rules as the atomic editor.
+        catalogService.deleteSku(productId, skuId);
         return ResponseEntity.ok(Map.of("message", "ok"));
     }
 
@@ -279,10 +240,38 @@ public class ProductController {
             return ResponseEntity.badRequest()
                     .body(Map.of("message", e.getMessage()));
         }
-        sku.setBarcode(barcode);
-        productSkuMapper.updateById(sku);
+        // luohuai codeX  modify: barcode regeneration must not write back a stock snapshot.
+        ProductSkuDTO barcodeChange = ProductSkuDTO.builder().color(sku.getColor()).size(sku.getSize()).barcode(barcode).build();
+        catalogService.updateSku(productId, skuId, barcodeChange);
 
         return ResponseEntity.ok(Map.of("barcode", barcode));
+    }
+
+    /**
+     * POST /api/product/barcode/generate
+     * 生成下一个可用条码（HUAXING + yyyyMMdd + 3位序号），供新增 SKU 时自动填充。
+     * 结合数据库最大序号与内存缓存，连续生成不重复（保存前未入库的序号也会递增）。
+     */
+    @PostMapping("/barcode/generate")
+    public synchronized ResponseEntity<Map<String, Object>> generateNextBarcode() {
+        String today = LocalDate.now().format(DateTimeFormatter.ofPattern("yyyyMMdd"));
+        String prefix = "HUAXING" + today;
+
+        int dbSeq = 0;
+        String maxBarcode = productSkuMapper.findMaxBarcodeByPrefix(prefix);
+        if (maxBarcode != null && maxBarcode.length() >= prefix.length() + 3) {
+            try {
+                dbSeq = Integer.parseInt(maxBarcode.substring(prefix.length()));
+            } catch (NumberFormatException ignored) {
+                // 忽略非法序号
+            }
+        }
+        int seq = Math.max(dbSeq, barcodeSeqCache.getOrDefault(prefix, 0)) + 1;
+        if (seq > 999) {
+            return ResponseEntity.badRequest().body(Map.of("message", "今日条码序号已用完（最大999）"));
+        }
+        barcodeSeqCache.put(prefix, seq);
+        return ResponseEntity.ok(Map.of("barcode", prefix + String.format("%03d", seq)));
     }
 
     /**
@@ -300,9 +289,12 @@ public class ProductController {
                 // ignore, use default seq = 1
             }
         }
+        // luohuai codeX  modify: share reservations with form-generated barcodes so both entry points stay distinct.
+        seq = Math.max(seq, barcodeSeqCache.getOrDefault(prefix, 0) + 1);
         if (seq > 999) {
             throw new IllegalStateException("今日条码序号已用完（最大999）");
         }
+        barcodeSeqCache.put(prefix, seq);
         return prefix + String.format("%03d", seq);
     }
 
@@ -311,6 +303,9 @@ public class ProductController {
     private ProductDTO toDTO(Product product) {
         ProductDTO.ProductDTOBuilder builder = ProductDTO.builder()
                 .id(product.getId())
+                // luohuai codeX  modify: return article number and unit to existing product clients.
+                .productCode(product.getProductCode())
+                .unit(product.getUnit())
                 .name(product.getName())
                 .imageUrl(product.getImageUrl())
                 .costPrice(product.getCostPrice())

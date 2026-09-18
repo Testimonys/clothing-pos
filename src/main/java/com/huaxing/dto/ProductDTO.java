@@ -19,6 +19,9 @@ public class ProductDTO {
     private Long categoryId;
     private String categoryName;
     private String name;
+    // luohuai codeX  modify: carry article numbers as text and expose selling units through the existing API.
+    private String productCode;
+    private String unit;
     private String imageUrl;
     private BigDecimal costPrice;
     private BigDecimal sellPrice;

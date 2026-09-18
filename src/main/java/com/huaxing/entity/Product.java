@@ -17,8 +17,8 @@ public class Product {
     @TableId(type = IdType.AUTO)
     private Long id;
 
-    /** 分类 ID 外键 */
-    @TableField("category_id")
+    /** luohuai codeX  modify: allow the complete catalog form to clear an optional category. */
+    @TableField(value = "category_id", updateStrategy = FieldStrategy.ALWAYS)
     private Long categoryId;
 
     /** 分类实体（非数据库字段，手动填充） */
@@ -27,10 +27,19 @@ public class Product {
 
     private String name;
 
-    @TableField("image_url")
+    /** luohuai codeX  modify: retain the store's article number separately from database IDs and SKU barcodes. */
+    @TableField(value = "product_code", updateStrategy = FieldStrategy.ALWAYS)
+    private String productCode;
+
+    /** luohuai codeX  modify: display the store's selling unit without duplicating price fields. */
+    private String unit;
+
+    // luohuai codeX  modify: removing a product image must persist the cleared optional value.
+    @TableField(value = "image_url", updateStrategy = FieldStrategy.ALWAYS)
     private String imageUrl;
 
-    @TableField("cost_price")
+    // luohuai codeX  modify: an unknown cost stays null instead of silently becoming a plausible zero.
+    @TableField(value = "cost_price", insertStrategy = FieldStrategy.ALWAYS, updateStrategy = FieldStrategy.ALWAYS)
     private BigDecimal costPrice;
 
     @TableField("sell_price")

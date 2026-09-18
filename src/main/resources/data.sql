@@ -24,3 +24,7 @@ INSERT IGNORE INTO category (id, name, parent_id, sort_order) VALUES
 (6, '衬衫', 1, 2),
 (7, '牛仔裤', 2, 1),
 (8, '休闲裤', 2, 2);
+
+-- 默认尺码标签（可在系统设置→标签管理中增删改）
+INSERT IGNORE INTO size_config (name, sort_order) VALUES
+('S', 1), ('M', 2), ('L', 3), ('XL', 4), ('2XL', 5), ('3XL', 6), ('4XL', 7);

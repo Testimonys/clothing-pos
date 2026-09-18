@@ -1,6 +1,9 @@
 # Git
 .git/
 .gitignore
+# luohuai codeX  modify: prevent local backend credentials from entering a Docker build context if COPY rules expand later.
+.env
+.env.*
 
 # IDE
 .idea/

@@ -206,6 +206,8 @@ body {
 
 /* 对话框：柔圆角 + 浮层阴影 */
 .el-dialog {
+  /* luohuai codeX  modify: fixed-width forms must fit smaller windows rather than clipping their controls. */
+  max-width: calc(100vw - 32px);
   border-radius: var(--radius-lg);
   box-shadow: var(--shadow-float);
   overflow: hidden;
@@ -219,6 +221,28 @@ body {
   font-weight: 600;
   color: var(--text-primary);
 }
+
+/* luohuai codeX generate: long forms scroll within the dialog, leaving the footer reachable. */
+.el-dialog__body {
+  max-height: calc(100dvh - 220px);
+  overflow: auto;
+}
+.el-dialog__footer {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 8px;
+}
+.el-dialog__footer .el-button + .el-button { margin-left: 0; }
+
+/* luohuai codeX generate: pagination reflows inside product, stock and order cards instead of overflowing them. */
+.pagination-wrap .el-pagination {
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 8px;
+  white-space: normal;
+}
+.pagination-wrap .el-pagination > * { margin-left: 0; }
 
 /* 标签：柔和圆角 */
 .el-tag {

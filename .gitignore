@@ -5,4 +5,7 @@ target/
 uploads/
 backup/
 *.log
+.env
+# luohuai codeX generate: keep local COS credentials out of version control; use .env as the template.
+.env.local
 .idea

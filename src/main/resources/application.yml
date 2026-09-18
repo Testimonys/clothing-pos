@@ -2,6 +2,14 @@ server:
   port: 8080
 
 spring:
+  config:
+    # luohuai codeX  modify: IDEA and java -jar do not load the ignored .env automatically, so import it for local backend configuration.
+    import: "optional:file:.env[.properties]"
+  # luohuai codeX generate: align multipart limits with COS uploads; image and import services retain their 5MB limit.
+  servlet:
+    multipart:
+      max-file-size: 10MB
+      max-request-size: 11MB
   datasource:
     url: jdbc:mysql://localhost:3306/clothing_pos?useUnicode=true&characterEncoding=UTF-8&serverTimezone=Asia/Shanghai
     username: root
@@ -26,6 +34,9 @@ app:
   jwt:
     secret: huaxing-clothing-pos-jwt-secret-key-2026
     expiration-ms: 86400000
+  cors:
+    # 允许的跨域来源（逗号分隔，支持通配符）。生产环境可只保留 https://luohuai2026.cn
+    allowed-origins: http://localhost:*,http://127.0.0.1:*,http://192.168.*.*:*,https://luohuai2026.cn
   store:
     name: 华兴服装店
   backup:
@@ -35,4 +46,15 @@ app:
     enabled: true
     port: /dev/cu.usbprinter
   upload:
+    # luohuai codeX  modify: retained only for historical /uploads URLs; new persisted uploads use COS.
     path: ./uploads
+
+# luohuai codeX generate: replace placeholders or inject environment variables; credentials remain backend-only.
+cos:
+  secret-id: ${COS_SECRET_ID:YOUR_SECRET_ID}
+  secret-key: ${COS_SECRET_KEY:YOUR_SECRET_KEY}
+  bucket-name: ${COS_BUCKET_NAME:YOUR_BUCKET_NAME-APPID}
+  region: ${COS_REGION:ap-shanghai}
+  # Optional HTTPS COS/CDN base URL. Empty uses https://<bucket>.cos.<region>.myqcloud.com.
+  public-url: ${COS_PUBLIC_URL:}
+  key-prefix: ${COS_KEY_PREFIX:clothing-pos}

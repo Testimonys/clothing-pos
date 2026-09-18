@@ -508,6 +508,9 @@ onUnmounted(() => {
 }
 
 .cart-header {
+  /* luohuai codeX  modify: separate the title and action when the cart header wraps. */
+  flex-wrap: wrap;
+  gap: 12px;
   display: flex;
   align-items: center;
   justify-content: space-between;
@@ -538,6 +541,10 @@ onUnmounted(() => {
 
 /* 底部结算栏 */
 .checkout-bar {
+  /* luohuai codeX  modify: move checkout onto another line before totals and discount controls overlap. */
+  flex-wrap: wrap;
+  gap: 16px;
+  flex-shrink: 0;
   display: flex;
   align-items: center;
   justify-content: space-between;
@@ -550,12 +557,16 @@ onUnmounted(() => {
 }
 
 .checkout-summary {
+  /* luohuai codeX  modify: keep each amount/label pair intact while allowing the summary to reflow. */
+  flex-wrap: wrap;
   display: flex;
   align-items: center;
-  gap: 32px;
+  gap: 12px 24px;
 }
 
 .summary-item {
+  /* luohuai codeX  modify: avoid compressed amount labels when adjacent controls run out of room. */
+  flex-wrap: wrap;
   display: flex;
   align-items: center;
   gap: 8px;

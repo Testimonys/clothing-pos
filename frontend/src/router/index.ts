@@ -60,8 +60,19 @@ const router = createRouter({
 })
 
 // 路由守卫
-router.beforeEach((to, _from, next) => {
+let authVerified = false
+
+router.beforeEach(async (to, _from, next) => {
   const authStore = useAuthStore()
+
+  // 首次导航：验证 localStorage 里的 token 是否仍有效（过期则清除并回登录页）
+  // 避免"有残留 token 但已失效 → 进入页面却查不到数据"的假登录态
+  if (!authVerified && to.path !== '/login') {
+    authVerified = true
+    if (authStore.isLoggedIn) {
+      await authStore.fetchUser() // fetchUser 内部失败时会 clearAuth
+    }
+  }
 
   // 已登录用户访问 /login → 重定向到 /pos
   if (to.path === '/login' && authStore.isLoggedIn) {

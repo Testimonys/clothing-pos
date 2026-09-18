@@ -33,11 +33,15 @@ CREATE TABLE IF NOT EXISTS product (
     id BIGINT AUTO_INCREMENT PRIMARY KEY,
     category_id BIGINT NULL,
     name VARCHAR(200) NOT NULL,
+    -- luohuai codeX  modify: optional unique store article number and selling unit; old installations use the migration script.
+    product_code VARCHAR(50) NULL,
+    unit VARCHAR(20) NOT NULL DEFAULT '件',
     image_url VARCHAR(500) NULL,
     cost_price DECIMAL(10,2) DEFAULT 0.00,
     sell_price DECIMAL(10,2) DEFAULT 0.00,
     create_time DATETIME DEFAULT CURRENT_TIMESTAMP,
     update_time DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    UNIQUE KEY uk_product_code (product_code),
     FOREIGN KEY (category_id) REFERENCES category(id)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 
@@ -98,4 +102,12 @@ CREATE TABLE IF NOT EXISTS order_item (
     sub_total DECIMAL(10,2) NOT NULL,
     barcode VARCHAR(100) DEFAULT '',
     FOREIGN KEY (order_id) REFERENCES sys_order(id)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+-- 尺码标签配置（全局字典，SKU 下拉选择）
+CREATE TABLE IF NOT EXISTS size_config (
+    id BIGINT AUTO_INCREMENT PRIMARY KEY,
+    name VARCHAR(50) NOT NULL UNIQUE,
+    sort_order INT DEFAULT 0,
+    create_time DATETIME DEFAULT CURRENT_TIMESTAMP
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;

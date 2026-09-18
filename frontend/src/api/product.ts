@@ -13,6 +13,9 @@ export interface ProductSkuDTO {
 }
 
 export interface ProductDTO {
+  // luohuai codeX  modify: preserve store article numbers as text and expose selling units.
+  productCode?: string | null
+  unit?: string
   id?: number
   categoryId?: number | null
   categoryName?: string
@@ -83,6 +86,46 @@ export function updateProduct(id: number, data: ProductDTO): Promise<ProductDTO>
   return request.put(`/product/${id}`, data).then((res) => res.data)
 }
 
+/** luohuai codeX generate: submit product metadata and color/size specifications as one atomic edit. */
+export function updateProductCatalog(id: number, data: ProductDTO): Promise<ProductDTO> {
+  return request.put(`/product/${id}/catalog`, data).then(res => res.data)
+}
+
+// luohuai codeX generate: preview contracts exclude stock so historical last-inbound quantities cannot become inventory.
+export type PreviewStatus = 'READY' | 'NEEDS_SPEC' | 'CONFLICT' | 'INVALID'
+export interface ProductImportRow {
+  sheet: string
+  sourceRow: number
+  productCode: string
+  name: string
+  unit: string
+  barcode: string
+  color: string
+  size: string
+  categoryName: string
+  costPrice: number | null
+  sellPrice: number | null
+  status: PreviewStatus
+  errors: string[]
+  conflicts: string[]
+  warnings: string[]
+}
+export interface ProductImportPreview {
+  totalRows: number
+  productCount: number
+  readyRows: number
+  needsSpecRows: number
+  conflictRows: number
+  invalidRows: number
+  notes: string[]
+  rows: ProductImportRow[]
+}
+export function previewProductImport(file: File): Promise<ProductImportPreview> {
+  const data = new FormData()
+  data.append('file', file)
+  return request.post('/product/import/preview', data, { timeout: 60000 }).then(res => res.data)
+}
+
 /** 删除商品及关联SKU */
 export function deleteProduct(id: number): Promise<{ message: string }> {
   return request.delete(`/product/${id}`).then((res) => res.data)
@@ -130,6 +173,11 @@ export function generateBarcode(
   return request
     .post(`/product/${productId}/sku/${skuId}/barcode`)
     .then((res) => res.data)
+}
+
+/** 生成下一个可用条码（HUAXING 规则，供新增 SKU 自动填充） */
+export function generateNextBarcode(): Promise<{ barcode: string }> {
+  return request.post('/product/barcode/generate').then((res) => res.data)
 }
 
 /** 获取分类列表（所有登录用户可用） */

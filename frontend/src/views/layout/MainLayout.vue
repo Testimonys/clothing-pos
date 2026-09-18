@@ -44,7 +44,8 @@
     </el-aside>
 
     <!-- 右侧主体 -->
-    <el-container>
+    <!-- luohuai codeX  modify: let the main flex item shrink so wide tables scroll inside their cards. -->
+    <el-container class="main-container">
       <!-- 顶部栏 -->
       <el-header class="header">
         <div class="header-left">
@@ -103,6 +104,9 @@ async function handleLogout() {
 .layout-container {
   height: 100vh;
 }
+
+/* luohuai codeX generate: prevent intrinsic chart/table widths from widening the entire application. */
+.main-container { min-width: 0; }
 
 .sidebar {
   background-color: #3a1e23;
@@ -180,6 +184,8 @@ async function handleLogout() {
 }
 
 .header {
+  /* luohuai codeX  modify: leave room for the logout action when the display name is long. */
+  gap: 12px;
   display: flex;
   align-items: center;
   justify-content: space-between;
@@ -190,11 +196,16 @@ async function handleLogout() {
 }
 
 .header-left {
+  /* luohuai codeX  modify: allow the greeting to shrink instead of covering the logout action. */
+  min-width: 0;
   display: flex;
   align-items: center;
 }
 
 .welcome-text {
+  /* luohuai codeX  modify: wrap long names and badges within the available header width. */
+  flex-wrap: wrap;
+  overflow-wrap: anywhere;
   font-size: 14px;
   color: var(--text-primary, #333);
   display: flex;
@@ -202,6 +213,8 @@ async function handleLogout() {
 }
 
 .header-right {
+  /* luohuai codeX  modify: keep the logout button intact while the greeting shrinks. */
+  flex-shrink: 0;
   display: flex;
   align-items: center;
 }

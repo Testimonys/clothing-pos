@@ -141,6 +141,9 @@ async function handleLogin() {
 
 /* 毛玻璃卡片 */
 .login-card {
+  /* luohuai codeX  modify: keep the login form inside a narrow viewport instead of clipping its labels and inputs. */
+  max-width: calc(100vw - 32px);
+  box-sizing: border-box;
   width: 420px;
   border-radius: 22px;
   padding: 10px;

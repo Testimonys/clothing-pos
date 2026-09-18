@@ -81,7 +81,8 @@
             >
               <template #default="{ node, data }">
                 <span class="category-node">
-                  <span class="category-node-label">{{ data.name }}</span>
+                  <!-- luohuai codeX  modify: expose the full category name while truncating long labels before the edit action. -->
+                  <span class="category-node-label" :title="data.name">{{ data.name }}</span>
                   <span class="category-node-actions">
                     <el-button type="primary" link size="small" @click.stop="handleEditCategory(data)">
                       <el-icon><Edit /></el-icon>
@@ -136,6 +137,48 @@
 
           <div v-if="!backupsLoading && backups.length === 0" class="empty-state" style="margin-top: 24px">
             <el-empty description="暂无备份记录，请点击「一键备份」" :image-size="80" />
+          </div>
+        </el-tab-pane>
+
+        <!-- ========== Tab 4: 标签管理（尺码） ========== -->
+        <el-tab-pane label="标签管理" name="sizes">
+          <div class="tab-header">
+            <span class="tab-title">尺码标签</span>
+            <el-button type="primary" size="default" @click="handleAddSize">
+              <el-icon><Plus /></el-icon>
+              新增尺码
+            </el-button>
+          </div>
+
+          <el-table :data="sizes" v-loading="sizesLoading" stripe style="width: 100%" row-key="id">
+            <el-table-column prop="id" label="ID" width="70" align="center" />
+            <el-table-column prop="name" label="尺码" min-width="160" />
+            <el-table-column prop="sortOrder" label="排序号" width="120" align="center" />
+            <el-table-column label="操作" width="160" align="center" fixed="right">
+              <template #default="{ row }">
+                <el-button type="primary" link size="small" @click="handleEditSize(row)">
+                  <el-icon><Edit /></el-icon>
+                  编辑
+                </el-button>
+                <el-popconfirm
+                  title="确定删除该尺码？"
+                  confirm-button-text="确定"
+                  cancel-button-text="取消"
+                  @confirm="handleDeleteSize(row)"
+                >
+                  <template #reference>
+                    <el-button type="danger" link size="small" style="margin-left: 4px">
+                      <el-icon><Delete /></el-icon>
+                      删除
+                    </el-button>
+                  </template>
+                </el-popconfirm>
+              </template>
+            </el-table-column>
+          </el-table>
+
+          <div v-if="!sizesLoading && sizes.length === 0" class="empty-state" style="margin-top: 24px">
+            <el-empty description="暂无尺码标签，请新增" :image-size="80" />
           </div>
         </el-tab-pane>
       </el-tabs>
@@ -209,6 +252,28 @@
         <el-button type="primary" :loading="categorySaving" @click="handleSaveCategory">保存</el-button>
       </template>
     </el-dialog>
+
+    <!-- ==================== 尺码标签弹窗 ==================== -->
+    <el-dialog
+      v-model="sizeDialogVisible"
+      :title="isEditSize ? '编辑尺码' : '新增尺码'"
+      width="480px"
+      :close-on-click-modal="false"
+      destroy-on-close
+    >
+      <el-form ref="sizeFormRef" :model="sizeForm" :rules="sizeFormRules" label-width="100px">
+        <el-form-item label="尺码名称" prop="name">
+          <el-input v-model="sizeForm.name" placeholder="如 S / M / L / XL / 2XL" />
+        </el-form-item>
+        <el-form-item label="排序号" prop="sortOrder">
+          <el-input-number v-model="sizeForm.sortOrder" :min="0" :max="9999" style="width: 100%" controls-position="right" />
+        </el-form-item>
+      </el-form>
+      <template #footer>
+        <el-button @click="sizeDialogVisible = false">取消</el-button>
+        <el-button type="primary" :loading="sizeSaving" @click="handleSaveSize">保存</el-button>
+      </template>
+    </el-dialog>
   </div>
 </template>
 
@@ -218,6 +283,7 @@ import { ElMessage } from 'element-plus'
 import { Plus, Search, Edit, Delete, Refresh, Download, Document } from '@element-plus/icons-vue'
 import request from '@/api/request'
 import { useAuthStore } from '@/stores/auth'
+import { listSizesForSetting, createSize, updateSize, deleteSize, type SizeConfigDTO } from '@/api/size'
 import type { FormInstance, ElTree } from 'element-plus'
 
 const authStore = useAuthStore()
@@ -705,6 +771,99 @@ function handleDownload(fileName: string) {
     })
 }
 
+// ===========================
+//  尺码标签管理
+// ===========================
+
+const sizes = ref<SizeConfigDTO[]>([])
+const sizesLoading = ref(false)
+const sizeDialogVisible = ref(false)
+const isEditSize = ref(false)
+const editSizeId = ref<number | null>(null)
+const sizeSaving = ref(false)
+const sizeFormRef = ref<FormInstance>()
+
+const sizeForm = reactive<{ name: string; sortOrder: number }>({
+  name: '',
+  sortOrder: 0
+})
+
+const sizeFormRules = {
+  name: [
+    { required: true, message: '请输入尺码名称', trigger: 'blur' },
+    { max: 20, message: '尺码名称不超过 20 个字符', trigger: 'blur' }
+  ]
+}
+
+async function loadSizes() {
+  sizesLoading.value = true
+  try {
+    sizes.value = await listSizesForSetting()
+  } catch {
+    ElMessage.error('加载尺码标签失败')
+  } finally {
+    sizesLoading.value = false
+  }
+}
+
+function handleAddSize() {
+  isEditSize.value = false
+  editSizeId.value = null
+  sizeForm.name = ''
+  sizeForm.sortOrder = 0
+  sizeDialogVisible.value = true
+  resetSizeFormValidate()
+}
+
+function handleEditSize(row: SizeConfigDTO) {
+  isEditSize.value = true
+  editSizeId.value = row.id ?? null
+  sizeForm.name = row.name || ''
+  sizeForm.sortOrder = row.sortOrder ?? 0
+  sizeDialogVisible.value = true
+  resetSizeFormValidate()
+}
+
+function resetSizeFormValidate() {
+  setTimeout(() => {
+    sizeFormRef.value?.clearValidate()
+  }, 50)
+}
+
+async function handleSaveSize() {
+  const valid = await sizeFormRef.value?.validate().catch(() => false)
+  if (!valid) return
+
+  sizeSaving.value = true
+  try {
+    if (isEditSize.value && editSizeId.value != null) {
+      await updateSize(editSizeId.value, { name: sizeForm.name, sortOrder: sizeForm.sortOrder })
+      ElMessage.success('尺码更新成功')
+    } else {
+      await createSize({ name: sizeForm.name, sortOrder: sizeForm.sortOrder })
+      ElMessage.success('尺码创建成功')
+    }
+    sizeDialogVisible.value = false
+    loadSizes()
+  } catch (err: any) {
+    const msg = err?.response?.data?.message || err?.message || '保存失败'
+    ElMessage.error(msg)
+  } finally {
+    sizeSaving.value = false
+  }
+}
+
+async function handleDeleteSize(row: SizeConfigDTO) {
+  try {
+    await deleteSize(row.id!)
+    ElMessage.success('删除成功')
+    loadSizes()
+  } catch (err: any) {
+    const msg = err?.response?.data?.message || err?.message || '删除失败'
+    ElMessage.error(msg)
+  }
+}
+
 // ---- 初始化 ----
 onMounted(() => {
   if (authStore.isBoss) {
@@ -714,6 +873,7 @@ onMounted(() => {
   loadUsers()
   loadCategories()
   loadBackups()
+  loadSizes()
 })
 </script>
 
@@ -723,6 +883,9 @@ onMounted(() => {
 }
 
 .tab-header {
+  /* luohuai codeX  modify: keep tab headings and actions apart when the window narrows. */
+  flex-wrap: wrap;
+  gap: 12px;
   display: flex;
   align-items: center;
   justify-content: space-between;
@@ -741,17 +904,26 @@ onMounted(() => {
 }
 
 .category-node {
+  /* luohuai codeX  modify: allow long category names to shrink beside their actions. */
+  min-width: 0;
   display: flex;
   align-items: center;
   width: 100%;
 }
 
 .category-node-label {
+  /* luohuai codeX  modify: avoid long names painting over edit controls or adjacent tree nodes. */
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
   flex: 1;
   font-size: 14px;
 }
 
 .category-node-actions {
+  /* luohuai codeX  modify: reserve the action width when a category label is truncated. */
+  flex-shrink: 0;
   display: none;
   margin-left: 8px;
 }
