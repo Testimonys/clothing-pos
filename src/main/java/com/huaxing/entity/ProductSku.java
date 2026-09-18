@@ -25,8 +25,16 @@ public class ProductSku {
 
     private String color;
 
+    /** luohuai codeX generate: nullable for legacy imports that still need specification cleanup. */
+    @TableField("color_config_id")
+    private Long colorConfigId;
+
     @TableField("`size`")
     private String size;
+
+    /** luohuai codeX generate: nullable for legacy imports that still need specification cleanup. */
+    @TableField("size_config_id")
+    private Long sizeConfigId;
 
     @TableField("barcode")
     private String barcode;

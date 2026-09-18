@@ -33,6 +33,8 @@ public class SecurityConfig {
                 .requestMatchers("/api/auth/login").permitAll()
                 .requestMatchers("/uploads/**").permitAll()
                 .requestMatchers("/api/setting/**").hasRole("BOSS")
+                // luohuai codeX generate: replacing an existing barcode is an administrator-only correction.
+                .requestMatchers("/api/product/barcode/reissue", "/api/product/*/sku/*/barcode").hasRole("BOSS")
                 .requestMatchers("/api/report/**").hasRole("BOSS")
                 .requestMatchers("/api/**").authenticated()
                 .anyRequest().permitAll()

@@ -28,21 +28,38 @@ CREATE TABLE IF NOT EXISTS sys_user (
     create_time DATETIME DEFAULT CURRENT_TIMESTAMP
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 
+-- luohuai codeX generate: dealer master data owns stable three-digit codes used by system-generated barcodes.
+CREATE TABLE IF NOT EXISTS dealer (
+    id BIGINT AUTO_INCREMENT PRIMARY KEY,
+    code CHAR(3) NOT NULL UNIQUE,
+    name VARCHAR(100) NOT NULL UNIQUE,
+    contact_name VARCHAR(50) NULL,
+    phone VARCHAR(50) NULL,
+    address VARCHAR(255) NULL,
+    remark VARCHAR(500) NULL,
+    enabled TINYINT(1) NOT NULL DEFAULT 1,
+    create_time DATETIME DEFAULT CURRENT_TIMESTAMP,
+    update_time DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
 -- 商品主表
 CREATE TABLE IF NOT EXISTS product (
     id BIGINT AUTO_INCREMENT PRIMARY KEY,
     category_id BIGINT NULL,
     name VARCHAR(200) NOT NULL,
     -- luohuai codeX  modify: optional unique store article number and selling unit; old installations use the migration script.
-    product_code VARCHAR(50) NULL,
+    product_code VARCHAR(6) NULL,
+    -- luohuai codeX  modify: a product belongs to exactly one dealer and article numbers are unique inside that dealer.
+    dealer_id BIGINT NULL,
     unit VARCHAR(20) NOT NULL DEFAULT '件',
     image_url VARCHAR(500) NULL,
     cost_price DECIMAL(10,2) DEFAULT 0.00,
     sell_price DECIMAL(10,2) DEFAULT 0.00,
     create_time DATETIME DEFAULT CURRENT_TIMESTAMP,
     update_time DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
-    UNIQUE KEY uk_product_code (product_code),
-    FOREIGN KEY (category_id) REFERENCES category(id)
+    UNIQUE KEY uk_product_dealer_code (dealer_id, product_code),
+    FOREIGN KEY (category_id) REFERENCES category(id),
+    FOREIGN KEY (dealer_id) REFERENCES dealer(id)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 
 -- SKU 规格
@@ -51,6 +68,9 @@ CREATE TABLE IF NOT EXISTS product_sku (
     product_id BIGINT NOT NULL,
     color VARCHAR(50) DEFAULT '',
     size VARCHAR(50) DEFAULT '',
+    -- luohuai codeX generate: stable dictionary references keep barcode codes independent from display-name changes.
+    color_config_id BIGINT NULL,
+    size_config_id BIGINT NULL,
     barcode VARCHAR(100) NULL UNIQUE,
     stock_qty INT DEFAULT 0,
     create_time DATETIME DEFAULT CURRENT_TIMESTAMP,
@@ -107,7 +127,42 @@ CREATE TABLE IF NOT EXISTS order_item (
 -- 尺码标签配置（全局字典，SKU 下拉选择）
 CREATE TABLE IF NOT EXISTS size_config (
     id BIGINT AUTO_INCREMENT PRIMARY KEY,
+    -- luohuai codeX  modify: immutable two-digit business codes participate in the 16-digit barcode.
+    code CHAR(2) NOT NULL UNIQUE,
     name VARCHAR(50) NOT NULL UNIQUE,
+    enabled TINYINT(1) NOT NULL DEFAULT 1,
     sort_order INT DEFAULT 0,
     create_time DATETIME DEFAULT CURRENT_TIMESTAMP
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+-- luohuai codeX generate: colors mirror size management and reserve 00 for products without a color distinction.
+CREATE TABLE IF NOT EXISTS color_config (
+    id BIGINT AUTO_INCREMENT PRIMARY KEY,
+    code CHAR(2) NOT NULL UNIQUE,
+    name VARCHAR(50) NOT NULL UNIQUE,
+    enabled TINYINT(1) NOT NULL DEFAULT 1,
+    sort_order INT DEFAULT 0,
+    create_time DATETIME DEFAULT CURRENT_TIMESTAMP
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+-- luohuai codeX generate: database-backed counters make the final three barcode digits safe across restarts.
+CREATE TABLE IF NOT EXISTS barcode_sequence (
+    prefix CHAR(13) PRIMARY KEY,
+    current_value INT NOT NULL DEFAULT 0
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+-- luohuai codeX generate: retain administrator dealer corrections instead of silently overwriting product provenance.
+CREATE TABLE IF NOT EXISTS product_dealer_history (
+    id BIGINT AUTO_INCREMENT PRIMARY KEY,
+    product_id BIGINT NOT NULL,
+    old_dealer_id BIGINT NULL,
+    new_dealer_id BIGINT NOT NULL,
+    create_time DATETIME DEFAULT CURRENT_TIMESTAMP,
+    FOREIGN KEY (product_id) REFERENCES product(id),
+    FOREIGN KEY (old_dealer_id) REFERENCES dealer(id),
+    FOREIGN KEY (new_dealer_id) REFERENCES dealer(id)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+-- luohuai codeX generate: dictionaries are declared after SKU for initialization compatibility, then linked here.
+ALTER TABLE product_sku ADD CONSTRAINT fk_sku_color_config FOREIGN KEY (color_config_id) REFERENCES color_config(id);
+ALTER TABLE product_sku ADD CONSTRAINT fk_sku_size_config FOREIGN KEY (size_config_id) REFERENCES size_config(id);

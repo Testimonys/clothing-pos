@@ -16,7 +16,10 @@ public class ProductSkuDTO {
     private Long id;
     private Long productId;
     private String color;
+    // luohuai codeX generate: dictionary IDs provide stable two-digit barcode segments.
+    private Long colorConfigId;
     private String size;
+    private Long sizeConfigId;
     private String barcode;
     private Integer stockQty;
     private LocalDateTime createTime;

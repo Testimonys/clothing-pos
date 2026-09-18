@@ -124,7 +124,11 @@ java -jar target/clothing-pos-1.0.0.jar
 mysql -u YOUR_DB_USER -p clothing_pos < scripts/migrations/2026-09-16-product-catalog.sql
 ```
 
-新库仍按原初始化流程创建。商品导入当前仅支持预览，不会自动导入 Excel 中的商品或库存；详见 [实现与验收说明](docs/2026-09-16-product-catalog-implementation.md)。
+新库仍按原初始化流程创建。商品导入先预览、后由管理员确认写入商品档案，始终不会从 Excel 写入库存；详见 [实现与验收说明](docs/2026-09-16-product-catalog-implementation.md)。
+
+## 2026-09-18 经销商、颜色与条码升级
+
+在完成上一版商品目录迁移后，继续执行 `scripts/migrations/2026-09-18-dealer-color-barcode.sql`。该脚本增加经销商归属、颜色/尺码业务编码、条码流水和经销商变更记录；不会修改库存，只会重建资料完整的 `HUAXING...` 测试条码，Excel 与人工条码保持原值。完整规则见 [经销商、颜色字典与16位条码实现说明](docs/2026-09-18-dealer-color-barcode.md)。
 
 ## 扫码枪
 

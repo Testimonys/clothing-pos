@@ -1,7 +1,7 @@
 <template>
-  <!-- luohuai codeX generate: preview source rows and specification gaps without offering an unimplemented import action. -->
+  <!-- luohuai codeX  modify: preserve preview-first safety while allowing an explicit confirmed catalog import. -->
   <el-dialog v-model="visible" title="商品导入预览" width="94%" :close-on-click-modal="false" destroy-on-close>
-    <el-alert type="info" :closable="false" show-icon title="每行对应一个颜色／尺码规格。同一货号可有多行，但每个规格须使用独立条码。预览不会写入商品或库存。" />
+    <el-alert type="info" :closable="false" show-icon title="先预览再确认导入。导入只创建商品与规格，不写入库存，也不覆盖已有记录。" />
     <div class="upload-row">
       <el-upload accept=".xls,.xlsx" :auto-upload="false" :show-file-list="false" :on-change="selectFile" :disabled="loading">
         <el-button :disabled="loading">选择 XLS / XLSX</el-button>
@@ -10,6 +10,7 @@
       <el-button type="primary" :loading="loading" :disabled="!selectedFile" @click="preview">检查并预览</el-button>
     </div>
     <template v-if="result">
+      <el-alert :type="result.dealerId ? 'success' : 'error'" :closable="false" show-icon :title="result.dealerId ? `经销商：${result.dealerCode} ${result.dealerName}` : `经销商未建立：${result.dealerName || '文件未提供客商'}`" />
       <div class="summary-row">
         <strong>{{ result.productCount }} 个货号 / {{ result.totalRows }} 条规格记录</strong>
         <el-tag type="success">可新增 {{ result.readyRows }}</el-tag>
@@ -38,7 +39,10 @@
       <el-pagination v-model:current-page="page" :page-size="50" :total="filteredRows.length" layout="total, prev, pager, next" class="preview-pages" />
       <p v-for="note in result.notes" :key="note" class="preview-note">{{ note }}</p>
     </template>
-    <template #footer><el-button @click="visible = false">关闭预览</el-button></template>
+    <template #footer>
+      <el-button @click="visible = false">关闭</el-button>
+      <el-button v-if="result" type="primary" :loading="importing" :disabled="!canImport" @click="commit">确认导入 {{ result.productCount }} 个商品</el-button>
+    </template>
   </el-dialog>
 </template>
 
@@ -46,19 +50,21 @@
 // luohuai codeX generate: bind upload and local pagination to the read-only server preview response.
 import { computed, ref } from 'vue'
 import { ElMessage, type UploadFile } from 'element-plus'
-import { previewProductImport, type ProductImportPreview, type PreviewStatus } from '@/api/product'
+import { commitProductImport, previewProductImport, type ProductImportPreview, type PreviewStatus } from '@/api/product'
 
 const props = defineProps<{ modelValue: boolean }>()
-const emit = defineEmits<{ 'update:modelValue': [value: boolean] }>()
+const emit = defineEmits<{ 'update:modelValue': [value: boolean]; imported: [] }>()
 const visible = computed({ get: () => props.modelValue, set: value => emit('update:modelValue', value) })
 const selectedFile = ref<File>()
 const loading = ref(false)
+const importing = ref(false)
 const result = ref<ProductImportPreview>()
 const statusFilter = ref('')
 const page = ref(1)
 const labels: Record<PreviewStatus, string> = { READY: '可新增', NEEDS_SPEC: '待补规格', CONFLICT: '已有冲突', INVALID: '数据错误' }
 const filteredRows = computed(() => (result.value?.rows || []).filter(row => !statusFilter.value || row.status === statusFilter.value))
 const pagedRows = computed(() => filteredRows.value.slice((page.value - 1) * 50, page.value * 50))
+const canImport = computed(() => !!result.value?.dealerId && result.value.invalidRows === 0 && result.value.conflictRows === 0)
 const money = (value?: number | null) => value == null ? '—' : `¥${value.toFixed(2)}`
 const statusType = (status: PreviewStatus) => status === 'READY' ? 'success' : status === 'NEEDS_SPEC' ? 'warning' : 'danger'
 
@@ -85,6 +91,20 @@ async function preview() {
   } finally {
     loading.value = false
   }
+}
+
+// luohuai codeX generate: server revalidates the same file inside the commit transaction.
+async function commit() {
+  if (!selectedFile.value || !canImport.value || importing.value) return
+  importing.value = true
+  try {
+    const imported = await commitProductImport(selectedFile.value)
+    ElMessage.success(`已导入 ${imported.productsCreated} 个商品、${imported.skusCreated} 条规格，库存未变更`)
+    emit('imported')
+    visible.value = false
+  } catch (error: any) {
+    ElMessage.error(error?.response?.data?.message || '导入失败，数据库未写入')
+  } finally { importing.value = false }
 }
 </script>
 

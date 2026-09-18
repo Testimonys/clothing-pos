@@ -2,7 +2,10 @@ import request from './request'
 
 export interface SizeConfigDTO {
   id?: number
+  // luohuai codeX  modify: expose immutable barcode codes and lifecycle status.
+  code?: string
   name?: string
+  enabled?: boolean
   sortOrder?: number
   createTime?: string
 }
@@ -25,7 +28,7 @@ export function createSize(data: { name: string; sortOrder?: number }): Promise<
 /** 更新尺码标签 */
 export function updateSize(
   id: number,
-  data: { name?: string; sortOrder?: number }
+  data: { name?: string; sortOrder?: number; enabled?: boolean }
 ): Promise<SizeConfigDTO> {
   return request.put(`/setting/sizes/${id}`, data).then((res) => res.data)
 }

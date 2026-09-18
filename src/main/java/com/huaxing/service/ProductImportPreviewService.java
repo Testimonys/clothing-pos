@@ -4,6 +4,9 @@ import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.huaxing.dto.ProductImportPreview;
 import com.huaxing.entity.Product;
 import com.huaxing.entity.ProductSku;
+import com.huaxing.entity.Dealer;
+import com.huaxing.entity.ColorConfig;
+import com.huaxing.entity.SizeConfig;
 import com.huaxing.mapper.ProductMapper;
 import com.huaxing.mapper.ProductSkuMapper;
 import org.apache.poi.ss.usermodel.*;
@@ -31,10 +34,15 @@ public class ProductImportPreviewService {
             Map.entry("分类", "category"), Map.entry("颜色", "color"), Map.entry("尺码", "size"), Map.entry("尺寸", "size"));
     private final ProductMapper products;
     private final ProductSkuMapper skus;
+    private final DealerService dealers;
+    private final SpecificationConfigService specifications;
 
-    public ProductImportPreviewService(ProductMapper products, ProductSkuMapper skus) {
+    public ProductImportPreviewService(ProductMapper products, ProductSkuMapper skus, DealerService dealers,
+                                       SpecificationConfigService specifications) {
         this.products = products;
         this.skus = skus;
+        this.dealers = dealers;
+        this.specifications = specifications;
     }
 
     public ProductImportPreview preview(MultipartFile file) {
@@ -52,8 +60,16 @@ public class ProductImportPreviewService {
             throw invalid("表格无法读取，请使用未加密、未损坏的 XLS/XLSX 文件");
         }
         if (result.getRows().isEmpty()) throw invalid("未找到商品记录，表头需包含“货号”和“品名/商品名称”");
+        // luohuai codeX  modify: imports use the confirmed file-level 客商 as dealer provenance.
+        Dealer dealer = dealers.findByName(result.getDealerName());
+        if (dealer == null || !Boolean.TRUE.equals(dealer.getEnabled())) {
+            result.getRows().forEach(row -> row.getErrors().add("经销商不存在或已停用，请先在经销商管理中创建：" + ProductCatalogService.text(result.getDealerName())));
+        } else {
+            result.setDealerId(dealer.getId());
+            result.setDealerCode(dealer.getCode());
+        }
         checkGroups(result.getRows());
-        checkExisting(result.getRows());
+        checkExisting(result);
         summarize(result);
         result.getNotes().add("本次仅预览，不写入商品、订单或库存；末入量不作为当前库存。");
         result.getNotes().add("同一货号按颜色和尺码拆分，每个规格需独立条码。原表的0无、0均码标为待补充，不自动生成规格。");
@@ -84,6 +100,12 @@ public class ProductImportPreviewService {
             result.getNotes().add("工作表“" + sheet.getSheetName() + "”未找到商品表头，已跳过。");
             return;
         }
+        // luohuai codeX generate: capture the last nonempty value on the 客商 header row (code may appear before name).
+        String dealerName = findDealerName(sheet, header, formatter);
+        if (!dealerName.isEmpty()) {
+            if (result.getDealerName() != null && !result.getDealerName().equals(dealerName)) throw invalid("同一文件包含多个不同经销商");
+            result.setDealerName(dealerName);
+        }
         if (sheet.getLastRowNum() - header > MAX_ROWS + 50) throw invalid("单表最多支持5000条商品，请拆分文件");
         for (int i = header + 1; i <= sheet.getLastRowNum(); i++) {
             org.apache.poi.ss.usermodel.Row source = sheet.getRow(i);
@@ -108,14 +130,44 @@ public class ProductImportPreviewService {
             row.setSize(ProductCatalogService.missingSize(size) ? "" : size);
             row.setCostPrice(price(source, columns, "cost", "成本价", formatter, row));
             row.setSellPrice(price(source, columns, "price", "零售价", formatter, row));
-            required(code, "货号", 50, row);
+            required(code, "货号", 6, row);
+            if (!code.isEmpty() && !code.matches("\\d{1,6}")) row.getErrors().add("货号必须是1-6位数字");
             required(barcode, "条码", 100, row);
             required(name, "品名", 200, row);
             if (row.getUnit().length() > 20 || row.getColor().length() > 50 || row.getSize().length() > 50) row.getErrors().add("单位、颜色或尺码超出允许长度");
             if (row.getColor().isEmpty() || row.getSize().isEmpty()) row.getWarnings().add("缺少真实颜色或尺码，请在源文件补充；不同规格不能共用原条码");
+            if (!row.getColor().isEmpty()) {
+                ColorConfig colorConfig = specifications.findColorByName(row.getColor());
+                if (colorConfig == null || !Boolean.TRUE.equals(colorConfig.getEnabled())) row.getErrors().add("颜色未在系统设置中启用：" + row.getColor());
+            }
+            if (!row.getSize().isEmpty()) {
+                SizeConfig sizeConfig = specifications.findSizeByName(row.getSize());
+                if (sizeConfig == null || !Boolean.TRUE.equals(sizeConfig.getEnabled())) row.getErrors().add("尺码未在系统设置中启用：" + row.getSize());
+            }
             result.getRows().add(row);
             if (result.getRows().size() > MAX_ROWS) throw invalid("单次最多预览5000条商品规格");
         }
+    }
+
+    private String findDealerName(Sheet sheet, int header, DataFormatter formatter) {
+        // luohuai codeX  modify: include the header row for compact exports that place 客商 metadata after business columns.
+        for (int r = 0; r <= header; r++) {
+            org.apache.poi.ss.usermodel.Row row = sheet.getRow(r);
+            if (row == null) continue;
+            for (int c = 0; c < row.getLastCellNum(); c++) {
+                if (!"客商".equals(formatter.formatCellValue(row.getCell(c)).trim())) continue;
+                List<String> values = new ArrayList<>();
+                for (int next = c + 1; next < row.getLastCellNum(); next++) {
+                    String candidate = formatter.formatCellValue(row.getCell(next)).trim();
+                    if (!candidate.isEmpty()) values.add(candidate);
+                    if (values.size() == 2) break;
+                }
+                // luohuai codeX  modify: legacy exports place numeric 客商 code before name; compact files may contain name only.
+                if (values.size() >= 2 && values.get(0).matches("\\d+")) return values.get(1);
+                return values.isEmpty() ? "" : values.get(0);
+            }
+        }
+        return "";
     }
 
     private boolean isFooterOrBlank(org.apache.poi.ss.usermodel.Row source, DataFormatter formatter, String code, String barcode, String name) {
@@ -188,13 +240,17 @@ public class ProductImportPreviewService {
                 .forEach(group -> group.forEach(row -> row.getErrors().add(message)));
     }
 
-    private void checkExisting(List<ProductImportPreview.Row> rows) {
+    private void checkExisting(ProductImportPreview result) {
+        List<ProductImportPreview.Row> rows = result.getRows();
         List<String> codes = rows.stream().map(ProductImportPreview.Row::getProductCode).filter(s -> !s.isEmpty()).distinct().collect(Collectors.toList());
         List<String> barcodes = rows.stream().map(ProductImportPreview.Row::getBarcode).filter(s -> !s.isEmpty()).distinct().collect(Collectors.toList());
         Set<String> existingCodes = new HashSet<>();
         Set<String> existingBarcodes = new HashSet<>();
         for (int i = 0; i < codes.size(); i += 500) {
-            products.selectList(new LambdaQueryWrapper<Product>().in(Product::getProductCode, codes.subList(i, Math.min(i + 500, codes.size()))))
+            LambdaQueryWrapper<Product> query = new LambdaQueryWrapper<Product>()
+                    .in(Product::getProductCode, codes.subList(i, Math.min(i + 500, codes.size())));
+            if (result.getDealerId() != null) query.eq(Product::getDealerId, result.getDealerId());
+            products.selectList(query)
                     .forEach(p -> existingCodes.add(normalize(p.getProductCode())));
         }
         for (int i = 0; i < barcodes.size(); i += 500) {

@@ -5,31 +5,20 @@ import lombok.*;
 
 import java.time.LocalDateTime;
 
-/**
- * 尺码标签配置（全局字典，SKU 尺码下拉选择）
- */
-@TableName("size_config")
+/** luohuai codeX generate: global selectable color dictionary with stable barcode codes. */
+@TableName("color_config")
 @Data
 @NoArgsConstructor
 @AllArgsConstructor
 @Builder
-public class SizeConfig {
-
+public class ColorConfig {
     @TableId(type = IdType.AUTO)
     private Long id;
-
-    /** luohuai codeX generate: immutable 00-99 barcode segment. */
     private String code;
-
-    /** 尺码名称，如 S / M / L / XL / 2XL */
     private String name;
-
-    /** luohuai codeX generate: used configurations are disabled instead of deleted or reused. */
     private Boolean enabled;
-
     @TableField("sort_order")
     private Integer sortOrder;
-
     @TableField(fill = FieldFill.INSERT)
     private LocalDateTime createTime;
 }

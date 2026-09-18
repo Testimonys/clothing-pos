@@ -25,6 +25,13 @@ INSERT IGNORE INTO category (id, name, parent_id, sort_order) VALUES
 (7, '牛仔裤', 2, 1),
 (8, '休闲裤', 2, 2);
 
--- 默认尺码标签（可在系统设置→标签管理中增删改）
-INSERT IGNORE INTO size_config (name, sort_order) VALUES
-('S', 1), ('M', 2), ('L', 3), ('XL', 4), ('2XL', 5), ('3XL', 6), ('4XL', 7);
+-- luohuai codeX  modify: stable codes are never reused; 00 has the confirmed no-dimension meaning.
+INSERT IGNORE INTO size_config (code, name, enabled, sort_order) VALUES
+('00', '均码', 1, 0), ('01', 'S', 1, 1), ('02', 'M', 1, 2), ('03', 'L', 1, 3),
+('04', 'XL', 1, 4), ('05', '2XL', 1, 5), ('06', '3XL', 1, 6), ('07', '4XL', 1, 7);
+
+-- luohuai codeX generate: 00 is selectable only when the product truly has no color distinction.
+INSERT IGNORE INTO color_config (code, name, enabled, sort_order) VALUES ('00', '无颜色', 1, 0);
+
+-- luohuai codeX generate: confirmed source dealer for the legacy test111.xls catalog.
+INSERT IGNORE INTO dealer (code, name, enabled) VALUES ('100', '新旺角', 1);

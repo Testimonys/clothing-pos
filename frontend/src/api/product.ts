@@ -6,7 +6,10 @@ export interface ProductSkuDTO {
   id?: number
   productId?: number
   color?: string
+  // luohuai codeX generate: stable dictionary IDs are required for system barcode generation.
+  colorConfigId?: number
   size?: string
+  sizeConfigId?: number
   barcode?: string
   stockQty?: number
   createTime?: string
@@ -15,6 +18,10 @@ export interface ProductSkuDTO {
 export interface ProductDTO {
   // luohuai codeX  modify: preserve store article numbers as text and expose selling units.
   productCode?: string | null
+  dealerId?: number | null
+  dealerCode?: string
+  dealerName?: string
+  dealerChangeConfirmed?: boolean
   unit?: string
   id?: number
   categoryId?: number | null
@@ -111,6 +118,10 @@ export interface ProductImportRow {
   warnings: string[]
 }
 export interface ProductImportPreview {
+  // luohuai codeX generate: preview exposes the file-level dealer resolved from 客商.
+  dealerId: number | null
+  dealerCode: string | null
+  dealerName: string
   totalRows: number
   productCount: number
   readyRows: number
@@ -124,6 +135,13 @@ export function previewProductImport(file: File): Promise<ProductImportPreview> 
   const data = new FormData()
   data.append('file', file)
   return request.post('/product/import/preview', data, { timeout: 60000 }).then(res => res.data)
+}
+
+/** luohuai codeX generate: re-upload and revalidate the previewed file before atomic catalog import. */
+export function commitProductImport(file: File): Promise<{ productsCreated: number; skusCreated: number; dealerName: string }> {
+  const data = new FormData()
+  data.append('file', file)
+  return request.post('/product/import/commit', data, { timeout: 60000 }).then(res => res.data)
 }
 
 /** 删除商品及关联SKU */
@@ -175,9 +193,24 @@ export function generateBarcode(
     .then((res) => res.data)
 }
 
-/** 生成下一个可用条码（HUAXING 规则，供新增 SKU 自动填充） */
-export function generateNextBarcode(): Promise<{ barcode: string }> {
-  return request.post('/product/barcode/generate').then((res) => res.data)
+/** luohuai codeX  modify: generate a 16-digit barcode only from complete managed business segments. */
+export function generateNextBarcode(data: {
+  dealerId?: number | null
+  productCode?: string
+  sizeConfigId?: number
+  colorConfigId?: number
+}): Promise<{ barcode: string }> {
+  return request.post('/product/barcode/generate', data).then((res) => res.data)
+}
+
+/** luohuai codeX generate: administrator-only issuance of a replacement barcode. */
+export function reissueBarcode(data: {
+  dealerId?: number | null
+  productCode?: string
+  sizeConfigId?: number
+  colorConfigId?: number
+}): Promise<{ barcode: string }> {
+  return request.post('/product/barcode/reissue', data).then(res => res.data)
 }
 
 /** 获取分类列表（所有登录用户可用） */

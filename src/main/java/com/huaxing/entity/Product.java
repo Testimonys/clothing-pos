@@ -31,6 +31,14 @@ public class Product {
     @TableField(value = "product_code", updateStrategy = FieldStrategy.ALWAYS)
     private String productCode;
 
+    /** luohuai codeX generate: fixed dealer ownership identifies the product's purchasing source. */
+    @TableField(value = "dealer_id", updateStrategy = FieldStrategy.ALWAYS)
+    private Long dealerId;
+
+    /** luohuai codeX generate: joined dealer data is exposed without duplicating persisted columns. */
+    @TableField(exist = false)
+    private Dealer dealer;
+
     /** luohuai codeX  modify: display the store's selling unit without duplicating price fields. */
     private String unit;
 

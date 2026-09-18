@@ -5,6 +5,8 @@ import com.huaxing.config.MyMetaObjectHandler;
 import com.huaxing.controller.ProductController;
 import com.huaxing.dto.ProductDTO;
 import com.huaxing.dto.ProductSkuDTO;
+import com.huaxing.dto.BarcodeGenerateRequest;
+import com.huaxing.entity.Dealer;
 import com.huaxing.entity.Product;
 import com.huaxing.entity.ProductSku;
 import com.huaxing.mapper.ProductMapper;
@@ -33,6 +35,26 @@ import static org.assertj.core.api.Assertions.*;
 
 /** luohuai codeX generate: verify catalog transactions and metadata-only inventory preservation. */
 class CatalogIntegrationTest extends CatalogTestSupport {
+    // luohuai codeX generate: verify the agreed 16-digit segment layout and per-prefix identifier sequence.
+    @Test
+    void generatesStableSixteenDigitBusinessBarcodes() {
+        BarcodeGenerateRequest request = new BarcodeGenerateRequest();
+        request.setDealerId(1L); request.setProductCode("10001"); request.setSizeConfigId(2L); request.setColorConfigId(1L);
+        assertThat(barcodeService.generate(request)).isEqualTo("1000100010201001");
+        assertThat(barcodeService.generate(request)).isEqualTo("1000100010201002");
+    }
+
+    // luohuai codeX generate: article-number uniqueness is scoped to one dealer, not the whole store.
+    @Test
+    void sameArticleNumberIsAllowedForDifferentDealers() {
+        catalog.create(product("10001", variant("黑色", "M", "dealer-a", 0)));
+        Dealer second = dealerService.create(Dealer.builder().name("第二经销商").build());
+        ProductDTO other = product("10001", variant("白色", "L", "dealer-b", 0));
+        other.setDealerId(second.getId());
+        assertThat(catalog.create(other).getDealerId()).isEqualTo(second.getId());
+        assertThat(products.selectCount(null)).isEqualTo(2);
+    }
+
     @Test
     void createsIndependentColorSizeVariantsAndKeepsArticleNumberAsText() {
         Product product = catalog.create(product("001001", variant("黑色", "M", "0012345678901", 3), variant("黑色", "L", "0012345678902", 8)));
@@ -84,7 +106,8 @@ class CatalogIntegrationTest extends CatalogTestSupport {
 
     @Test
     void rejectsUnknownNewSpecificationsAndMissingBarcodes() {
-        assertThatThrownBy(() -> catalog.create(product("10001", variant("0无", "0均码", "abc", 0)))).hasMessageContaining("真实颜色和尺码");
+        // luohuai codeX  modify: unmanaged specification text is rejected through the dictionary validation boundary.
+        assertThatThrownBy(() -> catalog.create(product("10001", variant("0无", "0均码", "abc", 0)))).hasMessageContaining("请选择启用的颜色");
         assertThatThrownBy(() -> catalog.create(product("10001", variant("黑色", "均码", "", 0)))).hasMessageContaining("条码");
         assertThat(products.selectCount(null)).isZero();
     }
@@ -151,7 +174,10 @@ class CatalogIntegrationTest extends CatalogTestSupport {
         Long skuId = product.getSkus().get(0).getId();
         assertThatThrownBy(() -> catalog.deleteSku(product.getId(), skuId)).hasMessageContaining("不能删除");
         assertThatThrownBy(() -> catalog.deleteProduct(product.getId())).hasMessageContaining("不能删除");
-        String reserved = String.valueOf(controller.generateNextBarcode().getBody().get("barcode"));
+        // luohuai codeX  modify: pre-save generation now requires all stable business-code segments.
+        BarcodeGenerateRequest request = new BarcodeGenerateRequest();
+        request.setDealerId(1L); request.setProductCode("10001"); request.setColorConfigId(1L); request.setSizeConfigId(2L);
+        String reserved = String.valueOf(controller.generateNextBarcode(request).getBody().get("barcode"));
         Map<?, ?> generated = (Map<?, ?>) controller.generateBarcode(product.getId(), skuId).getBody();
         assertThat(generated.get("barcode")).isNotEqualTo(reserved);
         assertThat(skus.selectById(skuId).getStockQty()).isEqualTo(2);

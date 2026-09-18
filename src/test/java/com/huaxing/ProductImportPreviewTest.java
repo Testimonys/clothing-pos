@@ -27,7 +27,8 @@ class ProductImportPreviewTest extends CatalogTestSupport {
     void recognizesLegacyHeaderAndSkipsFootersWithoutInventingStockOrSpecs() throws Exception {
         try (Workbook book = new HSSFWorkbook()) {
             Sheet sheet = book.createSheet("商品");
-            row(sheet, 0, "客商", "示例供应商");
+            // luohuai codeX  modify: preview fixtures use the configured confirmed dealer.
+            row(sheet, 0, "客商", "新旺角");
             row(sheet, 1, "联系");
             header(sheet, 2);
             row(sheet, 3, 10001, 2000000100012d, "外套", "件", 60, 169, "0无", "0均码", -8, "");
@@ -43,6 +44,24 @@ class ProductImportPreviewTest extends CatalogTestSupport {
             assertThat(result.getRows().get(0).getColor()).isEmpty();
             assertThat(products.selectCount(null)).isZero();
             assertThat(skus.selectCount(null)).isZero();
+        }
+    }
+
+    // luohuai codeX generate: confirmed import creates dealer-bound pending specifications but never inventory.
+    @Test
+    void confirmedImportWritesCatalogWithoutStock() throws Exception {
+        try (Workbook book = new HSSFWorkbook()) {
+            Sheet sheet = book.createSheet("商品");
+            header(sheet, 0);
+            row(sheet, 1, "10001", "2000000100012", "外套", "件", 60, 169, "0无", "0均码");
+            ByteArrayOutputStream bytes = new ByteArrayOutputStream();
+            book.write(bytes);
+            var result = importService.commit(new MockMultipartFile("file", "catalog.xls", "application/vnd.ms-excel", bytes.toByteArray()));
+            assertThat(result.productsCreated()).isEqualTo(1);
+            assertThat(products.selectList(null).get(0).getDealerId()).isEqualTo(1L);
+            assertThat(skus.selectList(null).get(0).getBarcode()).isEqualTo("2000000100012");
+            assertThat(skus.selectList(null).get(0).getStockQty()).isZero();
+            assertThat(jdbc.queryForObject("SELECT COUNT(*) FROM stock_record", Long.class)).isZero();
         }
     }
 
@@ -145,7 +164,8 @@ class ProductImportPreviewTest extends CatalogTestSupport {
     }
 
     private void header(Sheet sheet, int index) {
-        row(sheet, index, "货号", "条码", "品名", "单位", "成本价", "零售价", "颜色", "尺码", "末入量", "空列");
+        // luohuai codeX  modify: compact fixtures include required file-level dealer metadata on the header row.
+        row(sheet, index, "货号", "条码", "品名", "单位", "成本价", "零售价", "颜色", "尺码", "末入量", "空列", "客商", "新旺角");
     }
 
     private void row(Sheet sheet, int index, Object... values) {

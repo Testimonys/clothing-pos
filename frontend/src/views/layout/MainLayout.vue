@@ -28,6 +28,11 @@
           <el-icon><Box /></el-icon>
           <span>库存管理</span>
         </el-menu-item>
+        <!-- luohuai codeX generate: administrator dealer master data is promoted to the requested first-level navigation. -->
+        <el-menu-item v-if="authStore.isBoss" index="/dealer">
+          <el-icon><OfficeBuilding /></el-icon>
+          <span>经销商管理</span>
+        </el-menu-item>
         <el-menu-item index="/orders">
           <el-icon><Document /></el-icon>
           <span>订单管理</span>
@@ -73,6 +78,7 @@ import { computed } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { useAuthStore } from '@/stores/auth'
 import { ElMessageBox } from 'element-plus'
+import { OfficeBuilding } from '@element-plus/icons-vue'
 
 const route = useRoute()
 const router = useRouter()

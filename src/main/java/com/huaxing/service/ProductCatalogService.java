@@ -5,8 +5,12 @@ import com.huaxing.dto.ProductDTO;
 import com.huaxing.dto.ProductSkuDTO;
 import com.huaxing.entity.Product;
 import com.huaxing.entity.ProductSku;
+import com.huaxing.entity.ColorConfig;
+import com.huaxing.entity.SizeConfig;
+import com.huaxing.entity.ProductDealerHistory;
 import com.huaxing.mapper.ProductMapper;
 import com.huaxing.mapper.ProductSkuMapper;
+import com.huaxing.mapper.ProductDealerHistoryMapper;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -21,15 +25,22 @@ import java.util.stream.Collectors;
 public class ProductCatalogService {
     private final ProductMapper products;
     private final ProductSkuMapper skus;
+    private final DealerService dealers;
+    private final SpecificationConfigService specifications;
+    private final ProductDealerHistoryMapper dealerHistory;
 
-    public ProductCatalogService(ProductMapper products, ProductSkuMapper skus) {
+    public ProductCatalogService(ProductMapper products, ProductSkuMapper skus, DealerService dealers,
+                                 SpecificationConfigService specifications, ProductDealerHistoryMapper dealerHistory) {
         this.products = products;
         this.skus = skus;
+        this.dealers = dealers;
+        this.specifications = specifications;
+        this.dealerHistory = dealerHistory;
     }
 
     @Transactional
     public Product create(ProductDTO dto) {
-        validateProduct(dto, null);
+        validateProduct(dto, null, true);
         List<ProductSkuDTO> desired = requireSkus(dto);
         validateSkus(desired, Collections.emptyMap());
         Product product = new Product();
@@ -48,8 +59,10 @@ public class ProductCatalogService {
         if (!includeSkus) {
             if (dto.getProductCode() == null) dto.setProductCode(product.getProductCode());
             if (dto.getUnit() == null) dto.setUnit(product.getUnit());
+            // luohuai codeX  modify: legacy metadata clients do not know dealer ownership and must not clear it.
+            if (dto.getDealerId() == null) dto.setDealerId(product.getDealerId());
         }
-        validateProduct(dto, id);
+        validateProduct(dto, id, includeSkus);
         List<ProductSku> existing = listSkus(id);
         if (includeSkus) {
             List<ProductSkuDTO> desired = requireSkus(dto);
@@ -66,6 +79,14 @@ public class ProductCatalogService {
                 if (item.getId() == null) skus.insert(newSku(id, item));
                 else updateSkuMetadata(id, item);
             }
+        }
+        Long oldDealerId = product.getDealerId();
+        if (includeSkus && !Objects.equals(oldDealerId, dto.getDealerId())) {
+            // luohuai codeX generate: require a deliberate confirmation before changing provenance after business history exists.
+            if (skus.countProductHistory(id) > 0 && !Boolean.TRUE.equals(dto.getDealerChangeConfirmed())) {
+                throw conflict("商品已有库存或销售记录，更换经销商需要二次确认");
+            }
+            dealerHistory.insert(ProductDealerHistory.builder().productId(id).oldDealerId(oldDealerId).newDealerId(dto.getDealerId()).build());
         }
         copyProduct(dto, product);
         products.updateById(product);
@@ -131,22 +152,28 @@ public class ProductCatalogService {
         patch.setProductId(productId);
         patch.setColor(item.getColor());
         patch.setSize(item.getSize());
+        patch.setColorConfigId(item.getColorConfigId());
+        patch.setSizeConfigId(item.getSizeConfigId());
         patch.setBarcode(blankToNull(item.getBarcode()));
         if (skus.updateMetadata(patch) != 1) throw conflict("规格已变化，请刷新后重试");
     }
 
-    private void validateProduct(ProductDTO dto, Long id) {
+    private void validateProduct(ProductDTO dto, Long id, boolean completeForm) {
         if (dto == null) throw invalid("商品资料不能为空");
         dto.setName(text(dto.getName()));
         if (dto.getName().isEmpty() || dto.getName().length() > 200) throw invalid("商品名称必填且不超过200字");
         dto.setProductCode(blankToNull(dto.getProductCode()));
-        if (dto.getProductCode() != null && dto.getProductCode().length() > 50) throw invalid("货号不能超过50字");
+        if (completeForm && (dto.getProductCode() == null || !dto.getProductCode().matches("\\d{1,6}"))) throw invalid("货号必须是1-6位数字");
+        if (dto.getProductCode() != null && dto.getProductCode().length() > 6) throw invalid("货号不能超过6位");
+        if (completeForm) dealers.requireEnabled(dto.getDealerId());
         dto.setUnit(text(dto.getUnit()).isEmpty() ? "件" : text(dto.getUnit()));
         if (dto.getUnit().length() > 20) throw invalid("单位不能超过20字");
         validatePrice(dto.getCostPrice(), "成本价", false);
         validatePrice(dto.getSellPrice(), "零售价", true);
-        if (dto.getProductCode() != null) {
-            LambdaQueryWrapper<Product> query = new LambdaQueryWrapper<Product>().eq(Product::getProductCode, dto.getProductCode());
+        if (dto.getProductCode() != null && dto.getDealerId() != null) {
+            // luohuai codeX  modify: article numbers may repeat across dealers but not inside one dealer catalog.
+            LambdaQueryWrapper<Product> query = new LambdaQueryWrapper<Product>().eq(Product::getDealerId, dto.getDealerId())
+                    .eq(Product::getProductCode, dto.getProductCode());
             if (id != null) query.ne(Product::getId, id);
             if (products.selectCount(query) > 0) throw conflict("货号已存在：" + dto.getProductCode());
         }
@@ -170,8 +197,12 @@ public class ProductCatalogService {
             item.setSize(text(item.getSize()));
             item.setBarcode(blankToNull(item.getBarcode()));
             boolean unchangedLegacy = old != null && text(old.getColor()).equals(item.getColor()) && text(old.getSize()).equals(item.getSize());
-            if (!unchangedLegacy && (missingColor(item.getColor()) || missingSize(item.getSize()))) {
-                throw invalid("新增或修改规格必须填写真实颜色和尺码；均码商品请填写“均码”");
+            if (!unchangedLegacy || item.getColorConfigId() != null || item.getSizeConfigId() != null) {
+                // luohuai codeX  modify: new and changed specifications must use managed dictionaries, never free text.
+                ColorConfig color = specifications.requireColor(item.getColorConfigId(), old == null);
+                SizeConfig size = specifications.requireSize(item.getSizeConfigId(), old == null);
+                item.setColor(color.getName());
+                item.setSize(size.getName());
             }
             if (item.getColor().length() > 50 || item.getSize().length() > 50) throw invalid("颜色和尺码不能超过50字");
             String key = item.getColor().toLowerCase(Locale.ROOT) + "\u0000" + item.getSize().toLowerCase(Locale.ROOT);
@@ -206,6 +237,7 @@ public class ProductCatalogService {
     private void copyProduct(ProductDTO dto, Product product) {
         product.setName(dto.getName());
         product.setProductCode(dto.getProductCode());
+        product.setDealerId(dto.getDealerId());
         product.setUnit(dto.getUnit());
         product.setCategoryId(dto.getCategoryId());
         product.setImageUrl(dto.getImageUrl());
@@ -215,6 +247,7 @@ public class ProductCatalogService {
 
     private ProductSku newSku(Long productId, ProductSkuDTO dto) {
         return ProductSku.builder().productId(productId).color(dto.getColor()).size(dto.getSize())
+                .colorConfigId(dto.getColorConfigId()).sizeConfigId(dto.getSizeConfigId())
                 .barcode(dto.getBarcode()).stockQty(dto.getStockQty() == null ? 0 : dto.getStockQty()).version(0L).build();
     }
 
@@ -228,7 +261,8 @@ public class ProductCatalogService {
     }
 
     private ProductSkuDTO toDto(ProductSku sku) {
-        return ProductSkuDTO.builder().id(sku.getId()).color(sku.getColor()).size(sku.getSize()).barcode(sku.getBarcode()).build();
+        return ProductSkuDTO.builder().id(sku.getId()).color(sku.getColor()).size(sku.getSize())
+                .colorConfigId(sku.getColorConfigId()).sizeConfigId(sku.getSizeConfigId()).barcode(sku.getBarcode()).build();
     }
 
     public static String text(String value) { return value == null ? "" : value.trim(); }

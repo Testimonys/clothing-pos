@@ -140,8 +140,23 @@
           </div>
         </el-tab-pane>
 
-        <!-- ========== Tab 4: 标签管理（尺码） ========== -->
+        <!-- luohuai codeX  modify: manage colors and sizes together because both provide stable SKU barcode segments. -->
         <el-tab-pane label="标签管理" name="sizes">
+          <div class="tab-header">
+            <span class="tab-title">颜色标签</span>
+            <el-button type="primary" size="default" @click="handleAddColor"><el-icon><Plus /></el-icon>新增颜色</el-button>
+          </div>
+          <el-table :data="colors" v-loading="colorsLoading" stripe style="width: 100%" row-key="id">
+            <el-table-column prop="code" label="编码" width="90" align="center" />
+            <el-table-column prop="name" label="颜色" min-width="160" />
+            <el-table-column prop="sortOrder" label="排序号" width="100" align="center" />
+            <el-table-column label="状态" width="90"><template #default="{ row }"><el-tag :type="row.enabled ? 'success' : 'info'">{{ row.enabled ? '启用' : '停用' }}</el-tag></template></el-table-column>
+            <el-table-column label="操作" width="90" fixed="right"><template #default="{ row }">
+              <el-button type="primary" link @click="handleEditColor(row)">编辑</el-button>
+            </template></el-table-column>
+          </el-table>
+
+          <el-divider />
           <div class="tab-header">
             <span class="tab-title">尺码标签</span>
             <el-button type="primary" size="default" @click="handleAddSize">
@@ -151,28 +166,16 @@
           </div>
 
           <el-table :data="sizes" v-loading="sizesLoading" stripe style="width: 100%" row-key="id">
-            <el-table-column prop="id" label="ID" width="70" align="center" />
+            <el-table-column prop="code" label="编码" width="90" align="center" />
             <el-table-column prop="name" label="尺码" min-width="160" />
             <el-table-column prop="sortOrder" label="排序号" width="120" align="center" />
-            <el-table-column label="操作" width="160" align="center" fixed="right">
+            <el-table-column label="状态" width="90"><template #default="{ row }"><el-tag :type="row.enabled ? 'success' : 'info'">{{ row.enabled ? '启用' : '停用' }}</el-tag></template></el-table-column>
+            <el-table-column label="操作" width="90" align="center" fixed="right">
               <template #default="{ row }">
                 <el-button type="primary" link size="small" @click="handleEditSize(row)">
                   <el-icon><Edit /></el-icon>
                   编辑
                 </el-button>
-                <el-popconfirm
-                  title="确定删除该尺码？"
-                  confirm-button-text="确定"
-                  cancel-button-text="取消"
-                  @confirm="handleDeleteSize(row)"
-                >
-                  <template #reference>
-                    <el-button type="danger" link size="small" style="margin-left: 4px">
-                      <el-icon><Delete /></el-icon>
-                      删除
-                    </el-button>
-                  </template>
-                </el-popconfirm>
               </template>
             </el-table-column>
           </el-table>
@@ -254,6 +257,17 @@
     </el-dialog>
 
     <!-- ==================== 尺码标签弹窗 ==================== -->
+    <!-- luohuai codeX generate: color dialog mirrors size lifecycle controls without exposing immutable codes. -->
+    <el-dialog v-model="colorDialogVisible" :title="isEditColor ? '编辑颜色' : '新增颜色'" width="480px" :close-on-click-modal="false">
+      <el-form ref="colorFormRef" :model="colorForm" :rules="colorFormRules" label-width="100px">
+        <el-form-item v-if="isEditColor" label="颜色编码"><el-input v-model="colorForm.code" disabled /></el-form-item>
+        <el-form-item label="颜色名称" prop="name"><el-input v-model="colorForm.name" placeholder="如 黑色 / 白色" /></el-form-item>
+        <el-form-item label="排序号"><el-input-number v-model="colorForm.sortOrder" :min="0" :max="9999" style="width: 100%" /></el-form-item>
+        <el-form-item v-if="isEditColor" label="启用状态"><el-switch v-model="colorForm.enabled" /></el-form-item>
+      </el-form>
+      <template #footer><el-button @click="colorDialogVisible=false">取消</el-button><el-button type="primary" :loading="colorSaving" @click="handleSaveColor">保存</el-button></template>
+    </el-dialog>
+
     <el-dialog
       v-model="sizeDialogVisible"
       :title="isEditSize ? '编辑尺码' : '新增尺码'"
@@ -262,12 +276,14 @@
       destroy-on-close
     >
       <el-form ref="sizeFormRef" :model="sizeForm" :rules="sizeFormRules" label-width="100px">
+        <el-form-item v-if="isEditSize" label="尺码编码"><el-input v-model="sizeForm.code" disabled /></el-form-item>
         <el-form-item label="尺码名称" prop="name">
           <el-input v-model="sizeForm.name" placeholder="如 S / M / L / XL / 2XL" />
         </el-form-item>
         <el-form-item label="排序号" prop="sortOrder">
           <el-input-number v-model="sizeForm.sortOrder" :min="0" :max="9999" style="width: 100%" controls-position="right" />
         </el-form-item>
+        <el-form-item v-if="isEditSize" label="启用状态"><el-switch v-model="sizeForm.enabled" /></el-form-item>
       </el-form>
       <template #footer>
         <el-button @click="sizeDialogVisible = false">取消</el-button>
@@ -283,7 +299,9 @@ import { ElMessage } from 'element-plus'
 import { Plus, Search, Edit, Delete, Refresh, Download, Document } from '@element-plus/icons-vue'
 import request from '@/api/request'
 import { useAuthStore } from '@/stores/auth'
-import { listSizesForSetting, createSize, updateSize, deleteSize, type SizeConfigDTO } from '@/api/size'
+import { listSizesForSetting, createSize, updateSize, type SizeConfigDTO } from '@/api/size'
+// luohuai codeX generate: connect global color management beside existing size management.
+import { listColorsForSetting, createColor, updateColor, type ColorConfigDTO } from '@/api/color'
 import type { FormInstance, ElTree } from 'element-plus'
 
 const authStore = useAuthStore()
@@ -772,9 +790,48 @@ function handleDownload(fileName: string) {
 }
 
 // ===========================
-//  尺码标签管理
+//  颜色与尺码标签管理
 // ===========================
 
+// luohuai codeX generate: colors use server-assigned immutable codes and disable-in-place lifecycle.
+const colors = ref<ColorConfigDTO[]>([])
+const colorsLoading = ref(false)
+const colorDialogVisible = ref(false)
+const isEditColor = ref(false)
+const editColorId = ref<number | null>(null)
+const colorSaving = ref(false)
+const colorFormRef = ref<FormInstance>()
+const colorForm = reactive<{ code: string; name: string; sortOrder: number; enabled: boolean }>({ code: '', name: '', sortOrder: 0, enabled: true })
+const colorFormRules = { name: [{ required: true, message: '请输入颜色名称', trigger: 'blur' }] }
+
+async function loadColors() {
+  colorsLoading.value = true
+  try { colors.value = await listColorsForSetting() }
+  catch { ElMessage.error('加载颜色标签失败') }
+  finally { colorsLoading.value = false }
+}
+function handleAddColor() {
+  isEditColor.value = false; editColorId.value = null
+  Object.assign(colorForm, { code: '', name: '', sortOrder: 0, enabled: true })
+  colorDialogVisible.value = true
+  setTimeout(() => colorFormRef.value?.clearValidate(), 50)
+}
+function handleEditColor(row: ColorConfigDTO) {
+  isEditColor.value = true; editColorId.value = row.id ?? null
+  Object.assign(colorForm, { code: row.code || '', name: row.name || '', sortOrder: row.sortOrder ?? 0, enabled: row.enabled ?? true })
+  colorDialogVisible.value = true
+  setTimeout(() => colorFormRef.value?.clearValidate(), 50)
+}
+async function handleSaveColor() {
+  if (!await colorFormRef.value?.validate().catch(() => false)) return
+  colorSaving.value = true
+  try {
+    if (isEditColor.value && editColorId.value) await updateColor(editColorId.value, colorForm)
+    else await createColor(colorForm)
+    ElMessage.success('颜色已保存'); colorDialogVisible.value = false; await loadColors()
+  } catch (error: any) { ElMessage.error(error?.response?.data?.message || '保存失败') }
+  finally { colorSaving.value = false }
+}
 const sizes = ref<SizeConfigDTO[]>([])
 const sizesLoading = ref(false)
 const sizeDialogVisible = ref(false)
@@ -783,9 +840,12 @@ const editSizeId = ref<number | null>(null)
 const sizeSaving = ref(false)
 const sizeFormRef = ref<FormInstance>()
 
-const sizeForm = reactive<{ name: string; sortOrder: number }>({
+// luohuai codeX  modify: display immutable codes and allow safe enable/disable updates.
+const sizeForm = reactive<{ code: string; name: string; sortOrder: number; enabled: boolean }>({
+  code: '',
   name: '',
-  sortOrder: 0
+  sortOrder: 0,
+  enabled: true
 })
 
 const sizeFormRules = {
@@ -810,7 +870,9 @@ function handleAddSize() {
   isEditSize.value = false
   editSizeId.value = null
   sizeForm.name = ''
+  sizeForm.code = ''
   sizeForm.sortOrder = 0
+  sizeForm.enabled = true
   sizeDialogVisible.value = true
   resetSizeFormValidate()
 }
@@ -819,7 +881,9 @@ function handleEditSize(row: SizeConfigDTO) {
   isEditSize.value = true
   editSizeId.value = row.id ?? null
   sizeForm.name = row.name || ''
+  sizeForm.code = row.code || ''
   sizeForm.sortOrder = row.sortOrder ?? 0
+  sizeForm.enabled = row.enabled ?? true
   sizeDialogVisible.value = true
   resetSizeFormValidate()
 }
@@ -837,7 +901,7 @@ async function handleSaveSize() {
   sizeSaving.value = true
   try {
     if (isEditSize.value && editSizeId.value != null) {
-      await updateSize(editSizeId.value, { name: sizeForm.name, sortOrder: sizeForm.sortOrder })
+      await updateSize(editSizeId.value, { name: sizeForm.name, sortOrder: sizeForm.sortOrder, enabled: sizeForm.enabled })
       ElMessage.success('尺码更新成功')
     } else {
       await createSize({ name: sizeForm.name, sortOrder: sizeForm.sortOrder })
@@ -853,17 +917,6 @@ async function handleSaveSize() {
   }
 }
 
-async function handleDeleteSize(row: SizeConfigDTO) {
-  try {
-    await deleteSize(row.id!)
-    ElMessage.success('删除成功')
-    loadSizes()
-  } catch (err: any) {
-    const msg = err?.response?.data?.message || err?.message || '删除失败'
-    ElMessage.error(msg)
-  }
-}
-
 // ---- 初始化 ----
 onMounted(() => {
   if (authStore.isBoss) {
@@ -874,6 +927,7 @@ onMounted(() => {
   loadCategories()
   loadBackups()
   loadSizes()
+  loadColors()
 })
 </script>
 

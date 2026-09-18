@@ -13,7 +13,8 @@ import java.util.Optional;
 public interface ProductSkuMapper extends BaseMapper<ProductSku> {
 
     /** luohuai codeX generate: metadata edits never overwrite live stock; invalidate concurrent stale stock reads. */
-    @Update("UPDATE product_sku SET color = #{sku.color}, size = #{sku.size}, barcode = #{sku.barcode}, " +
+    @Update("UPDATE product_sku SET color = #{sku.color}, size = #{sku.size}, color_config_id = #{sku.colorConfigId}, " +
+            "size_config_id = #{sku.sizeConfigId}, barcode = #{sku.barcode}, " +
             "version = COALESCE(version, 0) + 1 WHERE id = #{sku.id} AND product_id = #{sku.productId}")
     int updateMetadata(@Param("sku") ProductSku sku);
 
@@ -21,6 +22,11 @@ public interface ProductSkuMapper extends BaseMapper<ProductSku> {
     @Select("SELECT (SELECT COUNT(*) FROM stock_record WHERE sku_id = #{id}) + " +
             "(SELECT COUNT(*) FROM order_item WHERE sku_id = #{id})")
     long countHistory(Long id);
+
+    /** luohuai codeX generate: changing a fixed dealer after business history requires explicit confirmation. */
+    @Select("SELECT (SELECT COUNT(*) FROM stock_record sr JOIN product_sku ps ON ps.id=sr.sku_id WHERE ps.product_id=#{productId}) + " +
+            "(SELECT COUNT(*) FROM order_item oi JOIN product_sku ps ON ps.id=oi.sku_id WHERE ps.product_id=#{productId})")
+    long countProductHistory(Long productId);
 
     @Select("SELECT * FROM product_sku WHERE barcode = #{barcode}")
     Optional<ProductSku> findByBarcode(String barcode);

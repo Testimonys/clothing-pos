@@ -6,21 +6,21 @@ import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
 import com.huaxing.config.PageUtils;
 import com.huaxing.dto.ProductDTO;
 import com.huaxing.dto.ProductSkuDTO;
+import com.huaxing.dto.BarcodeGenerateRequest;
 import com.huaxing.entity.Category;
 import com.huaxing.entity.Product;
 import com.huaxing.entity.ProductSku;
 import com.huaxing.mapper.CategoryMapper;
+import com.huaxing.mapper.DealerMapper;
 import com.huaxing.mapper.ProductMapper;
 import com.huaxing.mapper.ProductSkuMapper;
 import com.huaxing.service.ProductCatalogService;
+import com.huaxing.service.BarcodeService;
 import org.springframework.http.ResponseEntity;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.bind.annotation.*;
 
-import java.time.LocalDate;
-import java.time.format.DateTimeFormatter;
 import java.util.*;
-import java.util.concurrent.ConcurrentHashMap;
 import java.util.stream.Collectors;
 
 @RestController
@@ -30,19 +30,22 @@ public class ProductController {
     private final ProductMapper productMapper;
     private final ProductSkuMapper productSkuMapper;
     private final CategoryMapper categoryMapper;
+    private final DealerMapper dealerMapper;
     // luohuai codeX  modify: share validation and atomic catalog writes across existing endpoints.
     private final ProductCatalogService catalogService;
-
-    /** 当日条码序号缓存：新增 SKU 时连续生成，避免未保存前序号重复 */
-    private final Map<String, Integer> barcodeSeqCache = new ConcurrentHashMap<>();
+    // luohuai codeX  modify: replace JVM-local HUAXING generation with database-backed business segments.
+    private final BarcodeService barcodeService;
 
     public ProductController(ProductMapper productMapper,
                              ProductSkuMapper productSkuMapper,
-                             CategoryMapper categoryMapper, ProductCatalogService catalogService) {
+                             CategoryMapper categoryMapper, DealerMapper dealerMapper,
+                             ProductCatalogService catalogService, BarcodeService barcodeService) {
         this.productMapper = productMapper;
         this.productSkuMapper = productSkuMapper;
         this.categoryMapper = categoryMapper;
+        this.dealerMapper = dealerMapper;
         this.catalogService = catalogService;
+        this.barcodeService = barcodeService;
     }
 
     /**
@@ -218,10 +221,7 @@ public class ProductController {
         return ResponseEntity.ok(Map.of("message", "ok"));
     }
 
-    /**
-     * POST /api/product/{productId}/sku/{skuId}/barcode
-     * 生成条码 规则: HUAXING + yyyyMMdd + 3位序号
-     */
+    /** luohuai codeX  modify: regenerate a stored SKU using its dealer, article and stable specification codes. */
     @PostMapping("/{productId}/sku/{skuId}/barcode")
     @Transactional
     public ResponseEntity<?> generateBarcode(@PathVariable Long productId, @PathVariable Long skuId) {
@@ -230,72 +230,31 @@ public class ProductController {
             return ResponseEntity.notFound().build();
         }
 
-        String today = LocalDate.now().format(DateTimeFormatter.ofPattern("yyyyMMdd"));
-        String prefix = "HUAXING" + today;
-
-        String barcode;
-        try {
-            barcode = doGenerateBarcode(prefix);
-        } catch (IllegalStateException e) {
-            return ResponseEntity.badRequest()
-                    .body(Map.of("message", e.getMessage()));
-        }
+        Product product = productMapper.selectById(productId);
+        BarcodeGenerateRequest request = new BarcodeGenerateRequest();
+        request.setDealerId(product == null ? null : product.getDealerId());
+        request.setProductCode(product == null ? null : product.getProductCode());
+        request.setColorConfigId(sku.getColorConfigId());
+        request.setSizeConfigId(sku.getSizeConfigId());
+        String barcode = barcodeService.generate(request);
         // luohuai codeX  modify: barcode regeneration must not write back a stock snapshot.
-        ProductSkuDTO barcodeChange = ProductSkuDTO.builder().color(sku.getColor()).size(sku.getSize()).barcode(barcode).build();
+        ProductSkuDTO barcodeChange = ProductSkuDTO.builder().color(sku.getColor()).size(sku.getSize())
+                .colorConfigId(sku.getColorConfigId()).sizeConfigId(sku.getSizeConfigId()).barcode(barcode).build();
         catalogService.updateSku(productId, skuId, barcodeChange);
 
         return ResponseEntity.ok(Map.of("barcode", barcode));
     }
 
-    /**
-     * POST /api/product/barcode/generate
-     * 生成下一个可用条码（HUAXING + yyyyMMdd + 3位序号），供新增 SKU 时自动填充。
-     * 结合数据库最大序号与内存缓存，连续生成不重复（保存前未入库的序号也会递增）。
-     */
+    /** luohuai codeX  modify: pre-save generation requires all four stable business segments. */
     @PostMapping("/barcode/generate")
-    public synchronized ResponseEntity<Map<String, Object>> generateNextBarcode() {
-        String today = LocalDate.now().format(DateTimeFormatter.ofPattern("yyyyMMdd"));
-        String prefix = "HUAXING" + today;
-
-        int dbSeq = 0;
-        String maxBarcode = productSkuMapper.findMaxBarcodeByPrefix(prefix);
-        if (maxBarcode != null && maxBarcode.length() >= prefix.length() + 3) {
-            try {
-                dbSeq = Integer.parseInt(maxBarcode.substring(prefix.length()));
-            } catch (NumberFormatException ignored) {
-                // 忽略非法序号
-            }
-        }
-        int seq = Math.max(dbSeq, barcodeSeqCache.getOrDefault(prefix, 0)) + 1;
-        if (seq > 999) {
-            return ResponseEntity.badRequest().body(Map.of("message", "今日条码序号已用完（最大999）"));
-        }
-        barcodeSeqCache.put(prefix, seq);
-        return ResponseEntity.ok(Map.of("barcode", prefix + String.format("%03d", seq)));
+    public ResponseEntity<Map<String, Object>> generateNextBarcode(@RequestBody BarcodeGenerateRequest request) {
+        return ResponseEntity.ok(Map.of("barcode", barcodeService.generate(request)));
     }
 
-    /**
-     * 同步生成条码，避免并发重复。
-     * 规则: prefix + 3位递增序号（001~999）
-     */
-    private synchronized String doGenerateBarcode(String prefix) {
-        String maxBarcode = productSkuMapper.findMaxBarcodeByPrefix(prefix);
-        int seq = 1;
-        if (maxBarcode != null && maxBarcode.length() >= prefix.length() + 3) {
-            String seqStr = maxBarcode.substring(prefix.length());
-            try {
-                seq = Integer.parseInt(seqStr) + 1;
-            } catch (NumberFormatException e) {
-                // ignore, use default seq = 1
-            }
-        }
-        // luohuai codeX  modify: share reservations with form-generated barcodes so both entry points stay distinct.
-        seq = Math.max(seq, barcodeSeqCache.getOrDefault(prefix, 0) + 1);
-        if (seq > 999) {
-            throw new IllegalStateException("今日条码序号已用完（最大999）");
-        }
-        barcodeSeqCache.put(prefix, seq);
-        return prefix + String.format("%03d", seq);
+    /** luohuai codeX generate: separate administrator reissue route makes destructive barcode replacement explicit. */
+    @PostMapping("/barcode/reissue")
+    public ResponseEntity<Map<String, Object>> reissueBarcode(@RequestBody BarcodeGenerateRequest request) {
+        return ResponseEntity.ok(Map.of("barcode", barcodeService.generate(request)));
     }
 
     // ---- DTO mapping methods ----
@@ -305,6 +264,8 @@ public class ProductController {
                 .id(product.getId())
                 // luohuai codeX  modify: return article number and unit to existing product clients.
                 .productCode(product.getProductCode())
+                // luohuai codeX  modify: expose dealer ownership in product lists and edit forms.
+                .dealerId(product.getDealerId())
                 .unit(product.getUnit())
                 .name(product.getName())
                 .imageUrl(product.getImageUrl())
@@ -317,6 +278,12 @@ public class ProductController {
             Category category = categoryMapper.selectById(product.getCategoryId());
             builder.categoryId(product.getCategoryId());
             builder.categoryName(category != null ? category.getName() : null);
+        }
+        // luohuai codeX generate: dealer display is resolved from the stable foreign key rather than copied into product rows.
+        if (product.getDealerId() != null) {
+            var dealer = dealerMapper.selectById(product.getDealerId());
+            builder.dealerCode(dealer == null ? null : dealer.getCode());
+            builder.dealerName(dealer == null ? null : dealer.getName());
         }
 
         return builder.build();
@@ -337,7 +304,9 @@ public class ProductController {
                 .id(sku.getId())
                 .productId(sku.getProductId())
                 .color(sku.getColor())
+                .colorConfigId(sku.getColorConfigId())
                 .size(sku.getSize())
+                .sizeConfigId(sku.getSizeConfigId())
                 .barcode(sku.getBarcode())
                 .stockQty(sku.getStockQty())
                 .createTime(sku.getCreateTime())

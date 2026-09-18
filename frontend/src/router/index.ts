@@ -32,6 +32,13 @@ const routes: RouteRecordRaw[] = [
         component: () => import('@/views/stock/StockView.vue'),
         meta: { title: '库存管理', icon: 'Box', requiresAuth: true }
       },
+      // luohuai codeX generate: dealer management is a first-level administrator page beside catalog and stock.
+      {
+        path: 'dealer',
+        name: 'Dealer',
+        component: () => import('@/views/dealer/DealerView.vue'),
+        meta: { title: '经销商管理', icon: 'OfficeBuilding', requiresAuth: true, bossOnly: true }
+      },
       {
         path: 'orders',
         name: 'Orders',

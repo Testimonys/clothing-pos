@@ -11,7 +11,9 @@ import org.springframework.web.server.ResponseStatusException;
 import java.util.Map;
 
 /** luohuai codeX generate: return actionable catalog errors without changing other modules' response contracts. */
-@RestControllerAdvice(assignableTypes = {ProductController.class, ProductImportController.class})
+// luohuai codeX  modify: return the same actionable validation contract for dealer and specification management.
+@RestControllerAdvice(assignableTypes = {ProductController.class, ProductImportController.class,
+        DealerController.class, ColorConfigController.class, SizeConfigController.class})
 public class ProductApiExceptionHandler {
     private static final Logger log = LoggerFactory.getLogger(ProductApiExceptionHandler.class);
 

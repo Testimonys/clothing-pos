@@ -8,6 +8,10 @@ import java.util.List;
 /** luohuai codeX generate: a read-only preview reports source rows and unresolved specifications, never stock. */
 @Data
 public class ProductImportPreview {
+    // luohuai codeX generate: file-level dealer provenance applies to every imported product row.
+    private Long dealerId;
+    private String dealerCode;
+    private String dealerName;
     private int totalRows;
     private int productCount;
     private int readyRows;

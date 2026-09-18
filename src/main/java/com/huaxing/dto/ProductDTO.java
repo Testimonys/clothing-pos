@@ -21,6 +21,12 @@ public class ProductDTO {
     private String name;
     // luohuai codeX  modify: carry article numbers as text and expose selling units through the existing API.
     private String productCode;
+    // luohuai codeX generate: bind and display the product's single fixed dealer.
+    private Long dealerId;
+    private String dealerCode;
+    private String dealerName;
+    // luohuai codeX generate: explicit confirmation protects dealer changes after stock or sales history exists.
+    private Boolean dealerChangeConfirmed;
     private String unit;
     private String imageUrl;
     private BigDecimal costPrice;
